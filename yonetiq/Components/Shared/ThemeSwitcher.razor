@@ -1,0 +1,61 @@
+@using Microsoft.JSInterop
+@inject IJSRuntime JSRuntime
+
+<button type="button" class="yi-theme-toggle" @onclick="ToggleTheme"
+        title="@(_isDark ? "Açık temaya geç" : "Koyu temaya geç")"
+        aria-label="@(_isDark ? "Açık temaya geç" : "Koyu temaya geç")"
+        aria-pressed="@(_isDark.ToString().ToLower())">
+    @if (_isDark)
+    {
+        <i class="bi bi-sun-fill text-warning"></i>
+    }
+    else
+    {
+        <i class="bi bi-moon-stars-fill text-primary"></i>
+    }
+</button>
+
+<style>
+    .yi-theme-toggle {
+        background: rgba(255, 255, 255, 0.1);
+        border: 1px solid rgba(255, 255, 255, 0.2);
+        color: #fff;
+        width: 38px;
+        height: 38px;
+        border-radius: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        cursor: pointer;
+        transition: all 0.2s;
+        padding: 0;
+    }
+    .yi-theme-toggle:hover {
+        background: rgba(255, 255, 255, 0.2);
+        transform: scale(1.05);
+    }
+    .yi-theme-toggle i {
+        font-size: 1.1rem;
+    }
+</style>
+
+@code {
+    private bool _isDark;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var theme = await JSRuntime.InvokeAsync<string>("yiTheme.getTheme");
+            _isDark = theme == "dark";
+            StateHasChanged();
+        }
+    }
+
+    private async Task ToggleTheme()
+    {
+        _isDark = !_isDark;
+        var theme = _isDark ? "dark" : "light";
+        await JSRuntime.InvokeVoidAsync("yiTheme.setTheme", theme);
+    }
+}

@@ -1,0 +1,310 @@
+@page "/"
+@using System.Globalization
+@using YonetIQ.Components.Dashboard
+@inject QuerySetService QuerySetSvc
+@inject TaskService TaskSvc
+@inject MeetingService MeetingSvc
+@inject CalendarService CalendarSvc
+@inject LookupService LookupSvc
+@inject KpiTargetService KpiSvc
+@inject OkrService OkrSvc
+@inject ApprovalService ApprovalSvc
+@inject SessionService SessionSvc
+@using YonetIQ.Components.Shared.AI
+
+<PageTitle>Dashboard</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <PageHero Section="Dashboard" Icon="bi-speedometer2" Title="Dashboard" Subtitle="Genel operasyon paneli">
+        <Actions>
+            <a class="yi-btn-primary" href="/toplanti/yeni"><i class="bi bi-calendar-plus"></i> Toplantı Planla</a>
+            <a class="yi-btn-outline" href="/gorev/yeni"><i class="bi bi-plus-square"></i> Görev Ekle</a>
+            <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+                <i class="bi bi-stars"></i> AI Asistan
+            </button>
+        </Actions>
+    </PageHero>
+
+    <DashboardBriefing />
+
+    <InsightCards />
+
+    <KpiCards PendingTaskCount="_pendingTaskCount"
+              PendingDecisionCount="_pendingDecisionCount"
+              MonthlyEventCount="_monthlyTotalEventsCount"
+              DashboardSetCount="_dashboardSets.Count"
+              KpiTargets="_kpiTargets" />
+
+    <MetricProgress ActionRate="_actionRate" 
+                    DecisionDensity="_decisionDensity" 
+                    CalendarOccupancy="_calendarOccupancy" 
+                    PanelReadiness="_panelReadiness" />
+
+    <div class="row g-3 mb-3">
+        <div class="col-12 col-xxl-8">
+            <div class="yi-card">
+                <div class="yi-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <h2 class="yi-card-title">Aylık Takvim</h2>
+                    <div class="d-flex gap-2">
+                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="() => ChangeMonthAsync(-1)">Önceki</button>
+                        <button type="button" class="yi-btn-outline yi-btn-sm" disabled>@DisplayedMonthTitle</button>
+                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="() => ChangeMonthAsync(1)">Sonraki</button>
+                    </div>
+                </div>
+                <div class="yi-card-body p-2 p-lg-3">
+                    <div class="overflow-x-auto">
+                        <table class="yi-table yi-table-bordered">
+                            <thead>
+                                <tr>
+                                    @foreach (var dayName in _dayNames) { <th class="text-center">@dayName</th> }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var week in _calendarWeeks)
+                                {
+                                    <tr>
+                                        @foreach (var day in week.Days)
+                                        {
+                                            <td class="p-1" style="width:14.28%">
+                                                <button type="button" class="@GetDayButtonClass(day)"
+                                                        @onclick="() => SelectDayAsync(day)"
+                                                        aria-label="@GetDayAriaLabel(day)">
+                                                    @day.Day
+                                                </button>
+                                                @if (GetEventCountForDay(day) > 0) { <div class="yi-day-note" aria-hidden="true">@GetEventCountForDay(day)</div> }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xxl-4">
+            <div class="yi-card h-100">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">@SelectedDayTitle</h2>
+                </div>
+                <div class="yi-card-body">
+                    @if (SelectedDayEvents.Count == 0) { <div class="yi-empty">Bu gün için kayıtlı olay yok.</div> }
+                    else {
+                        <div class="yi-stack">
+                            @foreach (var ev in SelectedDayEvents) {
+                                <div class="yi-event-card">
+                                    <div class="yi-event-type">@ev.Type</div>
+                                    <div class="yi-event-title">@ev.Title</div>
+                                    <div class="yi-event-detail">@ev.Detail</div>
+                                    @if (!string.IsNullOrWhiteSpace(ev.Link)) { <a class="yi-link" href="@ev.Link">Detaya git</a> }
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <DashboardTables Tasks="_tasks" Decisions="_decisions" TaskStatuses="_taskStatuses" DecisionStatuses="_decisionStatuses" />
+
+    @* ── OKR + Onay Widget Row ────────────────────────────────────── *@
+    <div class="row g-3 mb-3">
+        @* OKR Özet *@
+        <div class="col-12 col-lg-7">
+            <div class="yi-card h-100">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title"><i class="bi bi-trophy me-2 text-warning"></i>OKR Hedefleri</h2>
+                    <a href="/hedefler" class="yi-btn-outline yi-btn-sm">Tümü</a>
+                </div>
+                <div class="yi-card-body">
+                    @if (_topObjectives.Count == 0)
+                    {
+                        <div class="yi-empty">Bu dönem için OKR hedefi tanımlanmamış.</div>
+                    }
+                    else
+                    {
+                        <div class="yi-stack">
+                            @foreach (var obj in _topObjectives)
+                            {
+                                <div class="d-flex align-items-center gap-3">
+                                    <div class="flex-grow-1" style="min-width:0">
+                                        <div class="d-flex justify-content-between small fw-semibold mb-1">
+                                            <span class="text-truncate me-2">@obj.Title</span>
+                                            <span class="text-@obj.ProgressClass fw-bold flex-shrink-0">%@obj.Progress.ToString("0")</span>
+                                        </div>
+                                        <div class="progress" style="height:6px;border-radius:3px">
+                                            <div class="progress-bar bg-@obj.ProgressClass"
+                                                 style="width:@obj.Progress%"
+                                                 role="progressbar"
+                                                 aria-valuenow="@obj.Progress" aria-valuemin="0" aria-valuemax="100"></div>
+                                        </div>
+                                        <div class="yi-muted" style="font-size:.72rem;margin-top:.2rem">@obj.LevelLabel · @obj.Period @obj.Year</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Bekleyen Onaylar *@
+        <div class="col-12 col-lg-5">
+            <div class="yi-card h-100">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title"><i class="bi bi-check2-circle me-2" style="color:var(--yi-primary)"></i>Bekleyen Onaylar</h2>
+                    <a href="/onaylar" class="yi-btn-outline yi-btn-sm">Merkez</a>
+                </div>
+                <div class="yi-card-body">
+                    @if (_pendingApprovals.Count == 0)
+                    {
+                        <div class="yi-empty">Bekleyen onay talebi yok.</div>
+                    }
+                    else
+                    {
+                        <div class="yi-stack">
+                            @foreach (var req in _pendingApprovals.Take(4))
+                            {
+                                <div class="d-flex justify-content-between align-items-start gap-2">
+                                    <div class="flex-grow-1" style="min-width:0">
+                                        <div class="small fw-semibold text-truncate">@req.Title</div>
+                                        <div class="yi-muted" style="font-size:.72rem">@req.RequestedByName · @req.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</div>
+                                    </div>
+                                    <a href="/onaylar" class="yi-btn-primary yi-btn-sm flex-shrink-0">İncele</a>
+                                </div>
+                            }
+                            @if (_pendingApprovals.Count > 4)
+                            {
+                                <div class="text-center">
+                                    <a href="/onaylar" class="small" style="color:var(--yi-text-link)">+@(_pendingApprovals.Count - 4) daha var</a>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <AiSidebar @ref="_aiSidebar" Module="dashboard" Parameters="@_aiParams" />
+}
+
+@code {
+    private static readonly string[] _dayNames = ["Pzt", "Sal", "Çar", "Per", "Cum", "Cmt", "Paz"];
+    private bool _isLoading = true;
+    private int _pendingTaskCount, _pendingDecisionCount, _monthlyTotalEventsCount;
+    private int _actionRate, _decisionDensity, _calendarOccupancy, _panelReadiness;
+    private DateTime _displayedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _selectedDay = DateTime.Today;
+    private readonly Dictionary<DateTime, List<CalendarEvent>> _calendarMap = [];
+    private List<CalendarWeek> _calendarWeeks = [];
+    private List<TaskItem> _tasks = [];
+    private List<Decision> _decisions = [];
+    private List<QuerySet> _dashboardSets = [];
+    private List<Lookup> _taskStatuses = [], _decisionStatuses = [];
+    private List<KpiTarget> _kpiTargets = [];
+    private List<Objective> _topObjectives = [];
+    private List<ApprovalRequest> _pendingApprovals = [];
+
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private string DisplayedMonthTitle => _displayedMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR"));
+    private string SelectedDayTitle => _selectedDay.ToString("dd MMMM yyyy, dddd", CultureInfo.GetCultureInfo("tr-TR"));
+    private List<CalendarEvent> SelectedDayEvents => _calendarMap.TryGetValue(_selectedDay.Date, out var list) ? list.OrderBy(x => x.Priority).ThenBy(x => x.Title).ToList() : [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _isLoading = true;
+        _pendingTaskCount = (await TaskSvc.GetPendingTaskCountAsync()).Data;
+        _pendingDecisionCount = (await MeetingSvc.GetPendingDecisionCountAsync()).Data;
+        _tasks = (await TaskSvc.ListPendingTasksAsync(5)).Data ?? [];
+        _decisions = (await MeetingSvc.ListLatestDecisionsAsync(5)).Data ?? [];
+        _actionRate = (await TaskSvc.GetActionRateAsync()).Data;
+        _decisionDensity = (await MeetingSvc.GetDecisionDensityAsync()).Data;
+        
+        var setsRes = await QuerySetSvc.GetAllAsync();
+        _dashboardSets = (setsRes.Data ?? []).Where(x => x.Type == "Dashboard").ToList();
+        _panelReadiness = _dashboardSets.Count == 0 ? 10 : Math.Min(100, _dashboardSets.Count * 25);
+
+        _taskStatuses = await LookupSvc.ListByGroupAsync("TaskStatus");
+        _decisionStatuses = await LookupSvc.ListByGroupAsync("DecisionStatus");
+
+        var kpiRes = await KpiSvc.ListAsync();
+        _kpiTargets = kpiRes.IsSuccess ? (kpiRes.Data ?? []) : [];
+
+        // OKR: mevcut yıl aktif hedeflerin ilk 4'ü
+        var okrRes = await OkrSvc.ListAsync(DateTime.Today.Year);
+        _topObjectives = (okrRes.IsSuccess ? (okrRes.Data ?? []) : [])
+            .OrderByDescending(o => o.Progress).Take(4).ToList();
+
+        // Bekleyen onaylar: giriş yapan kullanıcı için
+        var userId = SessionSvc.ActiveUser?.UserId ?? 0;
+        if (userId > 0)
+        {
+            var apprRes = await ApprovalSvc.GetPendingForUserAsync(userId);
+            _pendingApprovals = apprRes.IsSuccess ? (apprRes.Data ?? []) : [];
+        }
+
+        await LoadCalendarMonthAsync();
+        _calendarOccupancy = Math.Clamp(_monthlyTotalEventsCount * 4, 5, 100);
+        _isLoading = false;
+    }
+
+    private async Task ChangeMonthAsync(int monthDiff) { _displayedMonth = _displayedMonth.AddMonths(monthDiff); await LoadCalendarMonthAsync(); }
+    private async Task SelectDayAsync(DateTime day) {
+        if (day.Month != _displayedMonth.Month || day.Year != _displayedMonth.Year) {
+            _displayedMonth = new DateTime(day.Year, day.Month, 1);
+            await LoadCalendarMonthAsync();
+        }
+        _selectedDay = day.Date;
+    }
+
+    private async Task LoadCalendarMonthAsync() {
+        _calendarMap.Clear();
+        var monthStart = new DateTime(_displayedMonth.Year, _displayedMonth.Month, 1);
+        var res = await CalendarSvc.ListAsync(monthStart, monthStart.AddMonths(1).AddDays(-1));
+        var events = res.Data ?? [];
+        foreach (var group in events.GroupBy(x => x.Date.Date)) _calendarMap[group.Key] = group.ToList();
+        _monthlyTotalEventsCount = events.Count;
+        _calendarWeeks = BuildWeeks(monthStart);
+    }
+
+    private int GetEventCountForDay(DateTime day) => _calendarMap.TryGetValue(day.Date, out var list) ? list.Count : 0;
+    private string GetDayButtonClass(DateTime day) {
+        var cls = "yi-day-btn ";
+        if (day.Date == _selectedDay.Date) cls += "yi-day-selected ";
+        else if (GetEventCountForDay(day) > 0) cls += "yi-day-has-events ";
+        else cls += "yi-day-normal ";
+        if (day.Month != _displayedMonth.Month) cls += "yi-day-outside ";
+        if (day.Date == DateTime.Today) cls += "yi-day-today ";
+        return cls.TrimEnd();
+    }
+
+    private List<CalendarWeek> BuildWeeks(DateTime monthStart) {
+        var offset = ((int)monthStart.DayOfWeek + 6) % 7;
+        var start = monthStart.AddDays(-offset);
+        return Enumerable.Range(0, 6).Select(w => new CalendarWeek { Days = Enumerable.Range(0, 7).Select(d => start.AddDays(w * 7 + d)).ToList() }).ToList();
+    }
+
+    private string GetDayAriaLabel(DateTime day)
+    {
+        var label = day.ToString("d MMMM", CultureInfo.GetCultureInfo("tr-TR"));
+        if (day.Date == DateTime.Today) label += ", bugün";
+        var count = GetEventCountForDay(day);
+        if (count > 0) label += $", {count} olay";
+        return label;
+    }
+
+    private sealed class CalendarWeek { public List<DateTime> Days { get; set; } = []; }
+}
+
+

@@ -1,0 +1,909 @@
+@page "/yardim"
+
+<!--
+    YonetIQ Kullanici Kitapcigi
+    Uygulamanin tum modullerini, islevlerini ve ipuclarini anlatan detayli yardim sayfasidir.
+-->
+
+<PageTitle>Yardim & Kullanici Kitapcigi</PageTitle>
+
+<PageHero Section="Platform"
+          Icon="bi-book"
+          Title="Kullanici Kitapcigi"
+          Subtitle="YonetIQ'nun tum ozelliklerini kesfetmek icin kapsamli rehberiniz." />
+
+<div class="row g-4">
+    @* Sol Sidebar — Icindekiler *@
+    <div class="col-12 col-lg-3">
+        <div class="yi-card position-sticky" style="top: 1rem;">
+            <div class="yi-card-body p-3">
+                <p class="fw-semibold mb-2"><i class="bi bi-list-ul me-1"></i>Icindekiler</p>
+                <ul class="list-unstyled mb-0 small">
+                    @foreach (var helpItem in _sections)
+                    {
+                        <li class="mb-1">
+                            <a href="#@(helpItem.Anchor)" class="yi-nav-link py-1">
+                                <i class="bi bi-@(helpItem.Icon) me-1"></i>@helpItem.Title
+                            </a>
+                        </li>
+                    }
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    @* Ana Icerik *@
+    <div class="col-12 col-lg-9">
+
+        @* ═══════════════ GIRIS ═══════════════ *@
+        <div class="yi-card mb-4" id="giris">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-info-circle text-primary me-2"></i>YonetIQ Nedir?</h4>
+                <p>
+                    <strong>YonetIQ</strong>, kurumsal yonetim sureclerini tek bir platformda toplayan, yapay zeka destekli
+                    bir yonetim bilgi sistemidir. Toplanti planlama, gorev takibi, karar yonetimi, dinamik raporlama,
+                    onay surecleri, hedef yonetimi (OKR) ve kisisel notlardan olusan moduler yapisiyla
+                    tum ekip uyelerinin is akislarini kolaylastirmayi hedefler.
+                </p>
+                <div class="row g-2 mt-2">
+                    <div class="col-6 col-md-3">
+                        <div class="text-center p-2 rounded" style="background:var(--yi-surface-2)">
+                            <i class="bi bi-robot fs-4 text-primary"></i>
+                            <div class="small mt-1">AI Asistan</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center p-2 rounded" style="background:var(--yi-surface-2)">
+                            <i class="bi bi-check2-square fs-4 text-success"></i>
+                            <div class="small mt-1">Gorevler</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center p-2 rounded" style="background:var(--yi-surface-2)">
+                            <i class="bi bi-bar-chart-line fs-4 text-warning"></i>
+                            <div class="small mt-1">Raporlar</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="text-center p-2 rounded" style="background:var(--yi-surface-2)">
+                            <i class="bi bi-calendar-event fs-4 text-info"></i>
+                            <div class="small mt-1">Toplantilar</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ═══════════════ ANA EKRAN / DASHBOARD ═══════════════ *@
+        <div class="yi-card mb-4" id="ana-ekran">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-house-door text-primary me-2"></i>Ana Ekran (Dashboard)</h4>
+                <p>
+                    Ana ekran, gunluk is akisiniza hizli erisim saglayan ozet kartlarini, AI gunluk brifingini
+                    ve proaktif icgoruleri icerir. Giris yaptiginizda ilk gorunen sayfa budur.
+                </p>
+
+                <h6 class="mt-3">KPI Kartlari</h6>
+                <ul>
+                    <li><strong>Bekleyen Gorevler:</strong> Size atanan ve henuz tamamlanmamis gorev sayisi.</li>
+                    <li><strong>Yaklasan Toplanti:</strong> En yakin tarihli toplanti bilgisi.</li>
+                    <li><strong>Tamamlanmamis Karar:</strong> Goreve donusturulmemis acik karar sayisi.</li>
+                    <li><strong>Bugun Biten Gorevler:</strong> Son tarihi bugun olan gorevler.</li>
+                    <li><strong>Son 24 Saat Tamamlanan:</strong> Dun bu saate kadar kapatilan gorev sayisi.</li>
+                </ul>
+
+                <h6 class="mt-3">AI Gunluk Brifing</h6>
+                <p>
+                    Dashboard'un ust kisminda yer alan AI brifing karti, her gun otomatik olarak gununuzu ozetler.
+                    Bekleyen gorevler, yaklaşan toplantilar, geciken isler ve oncelikli aksiyonlari tek bir paragrafta sunar.
+                </p>
+
+                <h6 class="mt-3">Proaktif Icgoruler</h6>
+                <p>
+                    Brifing kartinin altinda, sistemin otomatik tespit ettigi uyari ve oneriler listelenir:
+                </p>
+                <ul>
+                    <li><i class="bi bi-exclamation-triangle text-danger me-1"></i><strong>Geciken Gorevler:</strong> Son tarihi gecmis gorev uyarisi.</li>
+                    <li><i class="bi bi-clock text-warning me-1"></i><strong>Bugun Biten Gorevler:</strong> Bugun teslim edilmesi gerekenler.</li>
+                    <li><i class="bi bi-calendar-check text-info me-1"></i><strong>Yaklasan Toplantilar:</strong> Bugunun toplanti programi.</li>
+                    <li><i class="bi bi-clipboard-check text-primary me-1"></i><strong>Bekleyen Kararlar/Onaylar:</strong> Aksiyon bekleyen kalemler.</li>
+                </ul>
+
+                <h6 class="mt-3">Dashboard Setleri</h6>
+                <p>
+                    "Dashboard" tipindeki dinamik sorgu setleri ana ekranda otomatik olarak listelenir.
+                    Her set, icerisindeki grafik ve tablolari tek sayfada gosterir.
+                </p>
+            </div>
+        </div>
+
+        @* ═══════════════ AI SISTEMI ═══════════════ *@
+        <div class="yi-card mb-4" id="ai-sistemi">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-robot text-primary me-2"></i>Yapay Zeka (AI) Sistemi</h4>
+                <p>
+                    YonetIQ, Google Gemini API ile entegre kapsamli bir AI sistemi sunar.
+                    Yapay zeka ozellikleri uygulamanin her noktasina yerlestirilmistir ve gunluk is akisinizi hizlandirir.
+                    AI ozelliklerini kullanmak icin sistem yoneticinizin bir Gemini API anahtari yapilandirmasi gerekir.
+                </p>
+
+                @* --- CommandBar --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-command me-2"></i>CommandBar (Komut Cubugu)</h5>
+                <p>
+                    Uygulamanin herhangi bir sayfasindayken <kbd>Ctrl</kbd> + <kbd>K</kbd> tuslarına basarak
+                    CommandBar'i acabilirsiniz. Bu hizli erisim arayuzu ile:
+                </p>
+                <ul>
+                    <li>Dogal dilde soru sorabilir veya komut verebilirsiniz.</li>
+                    <li>AI otomatik olarak en uygun skill'i secer ve calistirir.</li>
+                    <li>Sonuc, arayuzun ustunde kisa bir kart olarak gosterilir.</li>
+                </ul>
+                <div class="yi-alert yi-alert-info py-2 small">
+                    <i class="bi bi-lightbulb me-1"></i>
+                    <strong>Ipucu:</strong> "Geciken gorevlerimi ozetle", "Yarin toplantim var mi?", "Bu ayin OKR durumunu goster"
+                    gibi dogal dilde istekler yazabilirsiniz.
+                </div>
+
+                @* --- AI Sidebar --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-layout-sidebar-reverse me-2"></i>AI Sidebar (AI Asistan Paneli)</h5>
+                <p>
+                    Gorev, toplanti, not, rapor, sorgu, onay ve OKR sayfalarinda sag tarafta gorunen
+                    <strong>"AI Asistan"</strong> butonuna tiklandiginda acilir. Her sayfanin baglamina ozel
+                    AI onerileri sunar:
+                </p>
+                <ul>
+                    <li><strong>Gorev sayfasi:</strong> Gorev tanimini iyilestirme, risk analizi, alt gorev onerisi.</li>
+                    <li><strong>Toplanti sayfasi:</strong> Toplanti notu olusturma, aksiyon cikarimi, karar ozeti.</li>
+                    <li><strong>Not sayfasi:</strong> Not yapilandirma, etiket onerisi, gorev taslagi.</li>
+                    <li><strong>Rapor sayfasi:</strong> Rapor sonuclarini yorumlama, yonetici ozeti.</li>
+                    <li><strong>Sorgu editoru:</strong> Dogal dilden SQL uretme, sorgu aciklama.</li>
+                    <li><strong>Onay merkezi:</strong> Onay ozeti, risk degerlendirmesi.</li>
+                    <li><strong>OKR sayfasi:</strong> Ilerleme yorumu, aksiyon onerisi.</li>
+                </ul>
+
+                @* --- Gunluk Brifing --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-sunrise me-2"></i>AI Gunluk Brifing</h5>
+                <p>
+                    Ana ekranda otomatik olarak gorunen AI brifing karti, sisteminizin gunluk durumunu ozetler.
+                    Acik gorevler, yaklasan toplantilar, geciken isler ve oncelik siralamasi hakkinda kisa bir
+                    degerlendirme sunar. Her sayfa yuklemesinde guncel veriyle yenilenir.
+                </p>
+
+                @* --- Skill Sistemi --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-gear-wide-connected me-2"></i>Skill (Yetenek) Sistemi</h5>
+                <p>
+                    AI sistemi, her biri belirli bir isi yapan <strong>skill</strong>'lerden (yeteneklerden) olusur.
+                    CommandBar veya AI Sidebar uzerinden bir istek yaptiginizda, sistem otomatik olarak en uygun
+                    skill'i secer ve calistirir.
+                </p>
+
+                <h6 class="mt-3">Mevcut Skill Listesi</h6>
+                <table class="table table-sm small">
+                    <thead>
+                        <tr>
+                            <th style="width:30%">Skill</th>
+                            <th>Ne Yapar?</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><i class="bi bi-speedometer2 text-primary me-1"></i>Gunluk Brifing</td>
+                            <td>Dashboard'da gunun ozetini, oncelikleri ve aksiyonlari sunar.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-graph-up text-success me-1"></i>Performans Ozeti</td>
+                            <td>Gorev tamamlanma oranlari ve ekip performansini analiz eder.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-bullseye text-warning me-1"></i>Oncelik Onerisi</td>
+                            <td>Mevcut gorevlerinizi oncelik sirasina gore siralar ve oner sunar.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-list-check text-info me-1"></i>Gorev Netlestirme</td>
+                            <td>Gorev tanimini iyilestirir, olculebilir kriterler ve alt gorevler onerir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-clipboard-pulse text-danger me-1"></i>Gorev Risk Analizi</td>
+                            <td>Gorevdeki potansiyel riskleri ve gecikme ihtimallerini degerlendirir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-card-checklist text-primary me-1"></i>Alt Gorev Onerisi</td>
+                            <td>Gorev icin alt gorev kirilimi olusturur.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-journal-text text-success me-1"></i>Toplanti Ozeti</td>
+                            <td>Toplanti icerigi ve kararlardan yonetici ozeti uretir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-lightning text-warning me-1"></i>Aksiyon Cikarimi</td>
+                            <td>Toplanti notlarindan somut aksiyon maddeleri cikarir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-chat-square-text text-info me-1"></i>Karar Ozeti</td>
+                            <td>Toplanti kararlarini ozetler ve etki analizini sunar.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-layout-text-sidebar text-primary me-1"></i>Not Yapilandirma</td>
+                            <td>Notu analiz eder, yapilandirir ve etiket onerir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-tags text-success me-1"></i>Etiket Onerisi</td>
+                            <td>Not icerigine uygun etiketler onerir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-file-earmark-code text-warning me-1"></i>Sorgu Aciklama</td>
+                            <td>SQL sorgusunu Turkce olarak adim adim aciklar.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-translate text-info me-1"></i>Dogal Dil → SQL</td>
+                            <td>Turkce/Ingilizce aciklamanizi T-SQL sorgusuna cevirir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-file-earmark-bar-graph text-danger me-1"></i>Rapor Analizi</td>
+                            <td>Sorgu sonuclarini yorumlar ve yonetici ozeti uretir.</td>
+                        </tr>
+                        <tr>
+                            <td><i class="bi bi-shield-check text-primary me-1"></i>Onay Ozeti</td>
+                            <td>Onay talebini ozetler ve risk degerlendirmesi yapar.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                @* --- Guven Gostergesi --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-shield-fill-check me-2"></i>Guven Gostergesi (Confidence Badge)</h5>
+                <p>
+                    Her AI cevabinin yaninda renkli bir guven gostergesi bulunur. Bu gosterge, AI'in cevabindan
+                    ne kadar emin oldugunu yansitir:
+                </p>
+                <ul>
+                    <li><span class="badge bg-success">Yuksek</span> — AI, cevabindan oldukca emin. Sonuca guvenebilirsiniz.</li>
+                    <li><span class="badge bg-warning text-dark">Orta</span> — Makul duzey. Sonucu gozden gecirebilirsiniz.</li>
+                    <li><span class="badge bg-danger">Dusuk</span> — AI sinirli bilgiyle cevap uretti. Dogrulama onerilen.</li>
+                </ul>
+
+                @* --- Geri Bildirim --- *@
+                <h5 class="mt-4 mb-2"><i class="bi bi-hand-thumbs-up me-2"></i>AI Geri Bildirim</h5>
+                <p>
+                    Her AI sonucunun altinda geri bildirim butonlari bulunur. Sonucu faydali buldunuz mu?
+                </p>
+                <ul>
+                    <li><i class="bi bi-hand-thumbs-up text-success me-1"></i> Faydali buldunuz — AI bu tur cevaplari tekrarlamayı ogrensin.</li>
+                    <li><i class="bi bi-hand-thumbs-down text-danger me-1"></i> Yetersiz buldunuz — AI gelecekte daha iyi sonuc uretmeye calisir.</li>
+                </ul>
+                <div class="yi-alert yi-alert-info py-2 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Geri bildirimleriniz AI'in "altin hafizasina" (Golden Memory) kaydedilir ve gelecekteki cevap kalitesini arttirir.
+                </div>
+            </div>
+        </div>
+
+        @* ═══════════════ GOREVLER ═══════════════ *@
+        <div class="yi-card mb-4" id="gorevler">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-check2-square text-success me-2"></i>Gorev Modulu</h4>
+                <p>
+                    Gorevler, is takibinin temel yapitasidir. Gorev olusturabilir, atayabilir, durumlarini takip edebilir
+                    ve Kanban gorunumunde gorsel olarak yonetebilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Gorev Olusturma ve Atama</h6>
+                <ol>
+                    <li>Sol menuden <strong>Gorevler</strong>'e gidin.</li>
+                    <li><strong>Yeni Gorev</strong> butonuna tiklayin.</li>
+                    <li>Baslik, aciklama, atanan kisi, oncelik ve son tarihi doldurun.</li>
+                    <li>Kaydet'e tiklayin.</li>
+                </ol>
+
+                <h6 class="mt-3">Kanban Gorunumu</h6>
+                <p>
+                    Gorevler sayfasinda <strong>Kanban</strong> sekmesine gecerek gorevleri sutunlar halinde goruntuleyebilir,
+                    durumlarini guncelleyebilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Gorev Durumlari</h6>
+                <table class="table table-sm small">
+                    <thead><tr><th>Durum</th><th>Anlam</th></tr></thead>
+                    <tbody>
+                        <tr><td><span class="badge bg-secondary">Bekliyor</span></td><td>Henuz baslanmamis gorev</td></tr>
+                        <tr><td><span class="badge bg-primary">Devam Ediyor</span></td><td>Uzerinde calisilan gorev</td></tr>
+                        <tr><td><span class="badge bg-success">Tamamlandi</span></td><td>Kapatilmis gorev</td></tr>
+                        <tr><td><span class="badge bg-danger">Iptal</span></td><td>Iptal edilmis gorev</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="mt-3">Oncelik Seviyeleri</h6>
+                <p>
+                    Gorevler <strong>Dusuk</strong>, <strong>Normal</strong>, <strong>Yuksek</strong> ve <strong>Kritik</strong> oncelik
+                    seviyelerine sahip olabilir. Oncelik, listeleme ve AI oneri sirasini etkiler.
+                </p>
+
+                <h6 class="mt-3">AI ile Gorev Yonetimi</h6>
+                <p>
+                    Gorev formundaki <strong>AI Asistan</strong> butonuyla sidebar'i acin. AI ile su islemleri yapabilirsiniz:
+                </p>
+                <ul>
+                    <li><strong>Gorev Netlestirme:</strong> Belirsiz gorev tanimini net hedef + olculebilir kriterlerle zenginlestirir.</li>
+                    <li><strong>Risk Analizi:</strong> Gorevdeki potansiyel gecikme ve engelleri degerlendirir.</li>
+                    <li><strong>Alt Gorev Onerisi:</strong> Buyuk gorevi yonetilebilir parcalara boler.</li>
+                </ul>
+
+                <h6 class="mt-3">Efor Raporu ve Sablonlar</h6>
+                <p>
+                    Gorev listesinde filtreleme ve gruplandirma ozellikleri ile ekip bazli efor dagilimini gorebilirsiniz.
+                    Sik kullanilan gorev tipleri icin sablonlardan yararlanabilirsiniz.
+                </p>
+            </div>
+        </div>
+
+        @* ═══════════════ TOPLANTILAR ═══════════════ *@
+        <div class="yi-card mb-4" id="toplantilar">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-calendar-event text-primary me-2"></i>Toplanti Modulu</h4>
+                <p>
+                    Toplantilari planlayin, gundemi belirleyin, kararlari kaydedin ve aksiyonlari takip edin.
+                </p>
+
+                <h6 class="mt-3">Yeni Toplanti Olusturma</h6>
+                <ol>
+                    <li>Sol menuden <strong>Toplantilar</strong> secin.</li>
+                    <li><strong>Yeni Toplanti</strong> butonuna tiklayin.</li>
+                    <li>Baslik, tarih, saat, yer ve katilimci bilgilerini doldurun.</li>
+                    <li>Gundem metnini girin.</li>
+                    <li><strong>Kaydet</strong>'e tiklayin.</li>
+                </ol>
+
+                <h6 class="mt-3">Tekrarli Toplanti</h6>
+                <p>Yeni toplanti formunun alt kismindaki <strong>Tekrarlama</strong> secenegini kullanabilirsiniz:</p>
+                <ul>
+                    <li><strong>Her Gun / Hafta / Ay / Yil:</strong> Seri tipini secin.</li>
+                    <li><strong>Aralik:</strong> Her kac gunde/haftada/ayda bir tekrarlayacagini belirtin (orn. 2 = 2 haftada bir).</li>
+                    <li><strong>Seri Bitis Tarihi:</strong> Serinizin ne zaman sona erecegini secin.</li>
+                    <li>Olusturulacak ornek sayisi formda onizlenir.</li>
+                </ul>
+                <div class="yi-alert yi-alert-info py-2 small">
+                    <i class="bi bi-info-circle me-1"></i>
+                    Tekrarlayan bir seriyi duzenlerken yalnizca o tek ornek guncellenir; seri geneli etkilenmez.
+                </div>
+
+                <h6 class="mt-3">Kararlar</h6>
+                <p>
+                    Toplanti detay sayfasindan karar ekleyebilirsiniz. Her karar icin sorumlu kisi, son tarih ve oncelik belirtebilirsiniz.
+                    Bir karari goreve donusturmek icin <kbd>Goreve Donustur</kbd> butonunu kullanin — karar otomatik olarak gorev sistemine aktarilir.
+                </p>
+
+                <h6 class="mt-3">AI ile Toplanti Yonetimi</h6>
+                <p>
+                    Toplanti formundaki <strong>AI Asistan</strong> butonuyla:
+                </p>
+                <ul>
+                    <li><strong>Toplanti Ozeti:</strong> Gundem ve kararlardan yonetici ozeti uretir.</li>
+                    <li><strong>Aksiyon Cikarimi:</strong> Toplanti notlarindan somut aksiyon maddeleri cikarir.</li>
+                    <li><strong>Karar Ozeti:</strong> Alinan kararlari etkilerine gore ozetler.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ TAKVIM ═══════════════ *@
+        <div class="yi-card mb-4" id="takvim">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-calendar3 text-primary me-2"></i>Takvim Modulu</h4>
+                <p>
+                    Aylik gorunumde toplantilar, gorev son tarihleri ve ozel gunler (tatil, etkinlik) bir arada goruntulenir.
+                </p>
+                <ul>
+                    <li><strong>Ay Navigasyonu:</strong> Ok butonlariyla onceki/sonraki aya gecin.</li>
+                    <li><strong>Ozel Gun Ekleme:</strong> Sayfanin alt kismindaki formdan kurumsal tatil ve etkinlik gunleri tanimlayin.</li>
+                    <li><strong>Tekrarlayan Ozel Gunler:</strong> "Her Yil Tekrarla" secenegiyle yillik etkinlikleri (ulusal bayramlar) kaydedin.</li>
+                    <li><strong>Renk Kodlari:</strong> Toplantilar, gorevler ve ozel gunler farkli renklerle gosterilir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ ONAY MERKEZI ═══════════════ *@
+        <div class="yi-card mb-4" id="onay-merkezi">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-clipboard-check text-primary me-2"></i>Onay Merkezi</h4>
+                <p>
+                    Onay surecleri, belirli islemlerin (butce, satin alma, personel vb.) yetkili kisiler tarafindan
+                    degerlendirilerek onaylanmasi veya reddedilmesini saglar.
+                </p>
+
+                <h6 class="mt-3">Onay Akisi</h6>
+                <ol>
+                    <li>Bir islem onaya sunulur.</li>
+                    <li>Onay veren kisinin <strong>Onay Merkezi</strong> sayfasinda bekleyen onay gorunur.</li>
+                    <li>Detaylari inceleyerek <strong>Onayla</strong> veya <strong>Reddet</strong> butonlarina tiklayin.</li>
+                    <li>Istenirse yorum ekleyebilirsiniz.</li>
+                </ol>
+
+                <h6 class="mt-3">Cok Asamali Onay</h6>
+                <p>
+                    Bazi onay surecleri birden fazla asama icerebilir. Her asama sirasiyla tamamlanir;
+                    bir asamadaki red, sureci durdurur.
+                </p>
+
+                <h6 class="mt-3">AI ile Onay Destegi</h6>
+                <p>
+                    Onay merkezi sayfasindaki <strong>AI Asistan</strong> ile:
+                </p>
+                <ul>
+                    <li><strong>Onay Ozeti:</strong> Talebin kisa ozetini ve etkisini sunar.</li>
+                    <li><strong>Risk Degerlendirmesi:</strong> Onay talebindeki olasi riskleri degerlendirir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ OKR / HEDEFLER ═══════════════ *@
+        <div class="yi-card mb-4" id="hedefler">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-bullseye text-success me-2"></i>Hedefler (OKR)</h4>
+                <p>
+                    OKR (Objectives and Key Results) modulu ile kurumsal ve bireysel hedeflerinizi tanimlayabilir,
+                    anahtar sonuclari takip edebilir ve ilerlemeyi olcebilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Objective (Hedef) Tanimlama</h6>
+                <ul>
+                    <li>Sol menuden <strong>Hedefler</strong>'e gidin.</li>
+                    <li><strong>Yeni Hedef</strong> ile bir objective olusturun.</li>
+                    <li>Baslangic ve bitis tarihi, sorumlular ve aciklama girin.</li>
+                </ul>
+
+                <h6 class="mt-3">Key Result (Anahtar Sonuc)</h6>
+                <ul>
+                    <li>Her hedefin altinda bir veya daha fazla <strong>Key Result</strong> tanimlanir.</li>
+                    <li>Baslangic degeri, hedef degeri ve guncel degeri girin.</li>
+                    <li>Ilerleme yuzdesi otomatik hesaplanir.</li>
+                </ul>
+
+                <h6 class="mt-3">AI ile OKR Yonetimi</h6>
+                <p>
+                    OKR sayfasindaki <strong>AI Asistan</strong> ile:
+                </p>
+                <ul>
+                    <li><strong>Ilerleme Yorumu:</strong> Hedefinizin mevcut durumunu degerlendirir ve tahmin sunar.</li>
+                    <li><strong>Aksiyon Onerisi:</strong> Hedeflerinize ulasmak icin somut adimlar onerir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ MESAJLAR ═══════════════ *@
+        <div class="yi-card mb-4" id="mesajlar">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-chat-left-text text-primary me-2"></i>Mesajlar Modulu</h4>
+                <p>
+                    Sistem ici mesajlasma ve bildirim merkezidir. Gorev atamalari ve toplanti bildirimleri otomatik olarak bu bolume duser.
+                </p>
+                <ul>
+                    <li><strong>Yeni Mesaj:</strong> Kullanici secip mesaj gonderin.</li>
+                    <li><strong>Sistem Bildirimleri:</strong> Otomatik bildirimler (gorev atandi, toplanti olusturuldu) buraya gelir.</li>
+                    <li><strong>Okunmamis Sayac:</strong> Ust cubukta okunmamis mesaj sayisi goruntulenir.</li>
+                    <li><strong>Filtreleme:</strong> Okunmus/okunmamis filtresi ile mesajlarinizi yonetin.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ NOTLARIM ═══════════════ *@
+        <div class="yi-card mb-4" id="notlarim">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-journal-text text-info me-2"></i>Notlarim Modulu</h4>
+                <p>
+                    Kisisel notlarinizi saklayabileceginiz, hatirlatici ekleyebileceginiz ve goreve donusturebileceginiz ozel alandir.
+                    Notlariniz tamamen kiseldir; yalnizca siz gorebilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Not Olusturma</h6>
+                <ol>
+                    <li>Sol menuden <strong>Notlarim</strong>'i acin.</li>
+                    <li>Sag panelde baslik ve icerik girin.</li>
+                    <li>Istege bagli etiketler ekleyin (virgulle ayirin: <code>proje, toplanti, fikir</code>).</li>
+                    <li><kbd>Kaydet</kbd> butonuna tiklayin.</li>
+                </ol>
+
+                <h6 class="mt-3">Hatirlatici (Reminder)</h6>
+                <p>
+                    Not formunda <strong>Hatirlatma Tarihi</strong> alanini doldurarak belirli bir tarih ve saatte hatirlatici alabilirsiniz.
+                    Tarih geldiginde sayfa acildiginda uyari cubugu gosterilir.
+                </p>
+
+                <h6 class="mt-3">Goreve Donustur</h6>
+                <p>
+                    Not detayinda <strong>Goreve Donustur</strong> bolumunu acarak notunuzdan dogrudan bir gorev olusturabilirsiniz.
+                    Gorev basligi, son tarih ve oncelik alanlarini doldurarak <kbd>Goreve Donustur</kbd>'e tiklayin.
+                </p>
+
+                <h6 class="mt-3">AI ile Not Yonetimi</h6>
+                <p>
+                    Not sayfasindaki <strong>AI Asistan</strong> butonu ile:
+                </p>
+                <ul>
+                    <li><strong>Not Yapilandirma:</strong> Notu analiz eder, ozetler ve yapilandirir.</li>
+                    <li><strong>Etiket Onerisi:</strong> Icerige uygun etiketler onerir.</li>
+                    <li><strong>Gorev Taslagi:</strong> Nottan potansiyel gorev cikarir.</li>
+                    <li><strong>Hatirlatma Onerisi:</strong> Uygun hatirlatma zamani onerir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ RAPORLAMA ═══════════════ *@
+        <div class="yi-card mb-4" id="raporlama">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-bar-chart-line text-warning me-2"></i>Raporlama Modulu</h4>
+                <p>
+                    Dinamik raporlar olusturun, gorselleştirin, favorilere ekleyin ve paylasın.
+                </p>
+
+                <h6 class="mt-3">Rapor Merkezi</h6>
+                <p>
+                    Sol menuden <strong>Rapor Merkezi</strong>'ne gidin. Raporlar aranabilir, filtrelenebilir ve kategorilere gore gruplanabilir:
+                </p>
+                <ul>
+                    <li><strong>Arama:</strong> Ustteki metin kutusuna sorgu adi yazin.</li>
+                    <li><strong>Favoriler:</strong> <i class="bi bi-star-fill text-warning"></i> isaretlediginiz raporlari <kbd>Sadece Favoriler</kbd> ile filtreleyin.</li>
+                    <li><strong>Kategoriye Gore Grupla:</strong> Raporlari grafik tipine gore (Tablo, Pasta Grafik, vb.) gruplayin.</li>
+                    <li><strong>Paylasim:</strong> Bir raporu baska kullanicilarla paylasabilirsiniz.</li>
+                </ul>
+
+                <h6 class="mt-3">Rapor Calistirma ve Grafik Tipleri</h6>
+                <p>Bir rapora tikladiginizda sonucu goruntulersiniz. Desteklenen grafik tipleri:</p>
+                <div class="row g-1 mt-1">
+                    @foreach (var chartType in _chartTypes)
+                    {
+                        <div class="col-6 col-md-4">
+                            <div class="small p-1"><i class="bi bi-@(chartType.Icon) me-1 text-muted"></i>@chartType.Name</div>
+                        </div>
+                    }
+                </div>
+
+                <h6 class="mt-3">CSV / Excel Disari Aktarma</h6>
+                <p>
+                    Rapor sonuclarini <kbd>CSV Indir</kbd> veya <kbd>Excel Indir</kbd> butonlariyla disari aktarabilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Zamanli Raporlar</h6>
+                <p>
+                    Belirli raporlari otomatik olarak periyodik calistirmak icin zamanlama ayarlayabilirsiniz.
+                </p>
+
+                <h6 class="mt-3">AI ile Rapor Analizi</h6>
+                <p>
+                    Rapor calistirma sayfasindaki <strong>AI Asistan</strong> butonu ile AI sorgu sonuclarinizi
+                    yorumlar ve yonetici ozeti uretir. Onemli trendleri ve aykiri degerleri vurgular.
+                </p>
+            </div>
+        </div>
+
+        @* ═══════════════ SORGU EDITORU ═══════════════ *@
+        <div class="yi-card mb-4" id="sorgu-editoru">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-code-square text-primary me-2"></i>Sorgu Editoru</h4>
+                <p>
+                    Kendi SQL sorgularinizi yazabilir, kaydedebilir ve calistirabileceginiz guclu bir aractir.
+                </p>
+
+                <h6 class="mt-3">Temel Kullanim</h6>
+                <ol>
+                    <li>Sol menuden <strong>Sorgu Editoru</strong>'ne gidin.</li>
+                    <li>SQL sorgusunu yazin veya mevcut bir sorguyu acin.</li>
+                    <li><kbd>Calistir</kbd> butonuna tiklayin.</li>
+                    <li>Sonuclar altta tablo veya grafik olarak gosterilir.</li>
+                </ol>
+
+                <h6 class="mt-3">Sema Paneli</h6>
+                <p>
+                    Editorun yan tarafinda veritabani semasini gorebilirsiniz. Tablolar, kolonlar ve veri tipleri
+                    burada listelenir. Bir tabloya tikladiginizda kolon detaylari acilir.
+                </p>
+
+                <h6 class="mt-3">Parametre Destegi</h6>
+                <p>
+                    Sorgularinizda <code>@@ParamAdi</code> seklinde parametreler tanimlayabilirsiniz.
+                    Calistirmadan once parametre degerleri icin otomatik bir form gosterilir.
+                </p>
+
+                <h6 class="mt-3">AI ile Sorgu Olusturma</h6>
+                <p>
+                    <strong>AI Asistan</strong> butonu ile sidebar'i acin. Dogal dilde ne istediginizi yazin,
+                    AI sizin icin T-SQL sorgusu uretir. Ornekler:
+                </p>
+                <ul>
+                    <li>"Son 30 gundeki tamamlanan gorevleri departmana gore grupla"</li>
+                    <li>"Bu ayki toplantilari katilimci sayisina gore sirala"</li>
+                    <li>"Geciken gorevlerin sorumlu bazinda dagilimi"</li>
+                </ul>
+
+                <div class="yi-alert yi-alert-warning py-2 small">
+                    <i class="bi bi-exclamation-triangle me-1"></i>
+                    Editorde yalnizca SELECT sorgulari calistirilabilir. DDL (CREATE/DROP/ALTER) ve DML (INSERT/UPDATE/DELETE) komutlari engellenir.
+                </div>
+            </div>
+        </div>
+
+        @* ═══════════════ SET YONETIMI ═══════════════ *@
+        <div class="yi-card mb-4" id="set-yonetimi">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-collection text-primary me-2"></i>Dashboard / Set Yonetimi</h4>
+                <p>
+                    Birden fazla sorguyu tek bir ekranda birlestirmek icin <strong>Set Yonetimi</strong>'ni kullanin.
+                </p>
+
+                <h6 class="mt-3">Set Olusturma</h6>
+                <ol>
+                    <li>Sol menuden <strong>Set Yonetimi</strong>'ne gidin.</li>
+                    <li><strong>Yeni Set</strong> butonuna tiklayin.</li>
+                    <li>Set adi ve tipini (Dashboard veya Rapor) secin.</li>
+                    <li>Mevcut sorgulardan eklemek istediklerinizi secin.</li>
+                    <li>Her sorgunun sirasini ve genisligini ayarlayin.</li>
+                </ol>
+
+                <h6 class="mt-3">Navigasyonda Gosterme</h6>
+                <p>
+                    <strong>Navigasyonda Goster</strong> secenegi isaretlenince set sol menude gorunur hale gelir.
+                    Dashboard tipi setler ana ekranda da otomatik listelenir.
+                </p>
+
+                <h6 class="mt-3">Sorgu Genisligi</h6>
+                <p>
+                    Her sorguya <strong>6 kolon</strong> veya <strong>12 kolon</strong> genislik atayabilirsiniz.
+                    6 kolon secerseniz iki sorgu yan yana, 12 kolon secerseniz tek satirda goruntulenir.
+                </p>
+            </div>
+        </div>
+
+        @* ═══════════════ KULLANICI YONETIMI ═══════════════ *@
+        <div class="yi-card mb-4" id="kullanicilar">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-people text-primary me-2"></i>Kullanici Yonetimi</h4>
+                <p>
+                    Sistemdeki kullanicilari goruntuleyebilir, ekleyebilir veya duzenleyebilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Roller</h6>
+                <p>Kullanicilar asagidaki rollerden birine atanir. Rol, erisim yetkilenini belirler:</p>
+                <ul>
+                    <li><strong>Genel Mudur (GM):</strong> Tum verilere ve yonetim sayfalarına erisim.</li>
+                    <li><strong>Direktor:</strong> Kendi departmani ve alt birimlerin verilerine erisim.</li>
+                    <li><strong>Mudur:</strong> Kendi departmani verilerine erisim.</li>
+                    <li><strong>Kullanici:</strong> Yalnizca kendi gorev, not ve mesajlarina erisim.</li>
+                </ul>
+
+                <h6 class="mt-3">Kullanici Ekleme</h6>
+                <ol>
+                    <li><strong>Kullanicilar</strong> sayfasina gidin.</li>
+                    <li><strong>Yeni Kullanici</strong>'ya tiklayin.</li>
+                    <li>Ad, soyad, email, departman ve rol bilgilerini girin.</li>
+                    <li>Ilk sifre belirlenir; kullanici daha sonra profil sayfasindan degistirebilir.</li>
+                </ol>
+
+                <h6 class="mt-3">Departman Yonetimi</h6>
+                <p>
+                    Departmanlar Lookup/Taxonomy sistemi uzerinden yonetilir. Yeni departman eklemek icin
+                    <strong>Ayarlar</strong> altindaki Taxonomy sayfasini kullanin.
+                </p>
+            </div>
+        </div>
+
+        @* ═══════════════ PROFIL ═══════════════ *@
+        <div class="yi-card mb-4" id="profil">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-person-circle text-primary me-2"></i>Profil Ayarlari</h4>
+                <p>
+                    Ust cubukta yer alan kullanici adiniza tiklayarak veya sol menuden <strong>/profil</strong> adresine giderek
+                    profil sayfaniza ulasabilirsiniz.
+                </p>
+
+                <h6 class="mt-3">Bilgileri Duzenleme</h6>
+                <ul>
+                    <li><strong>Ad ve Soyad:</strong> Isminizi guncelleyebilirsiniz.</li>
+                    <li><strong>Email:</strong> Iletisim email adresinizi degistirebilirsiniz.</li>
+                </ul>
+
+                <h6 class="mt-3">Sifre Degistirme</h6>
+                <ol>
+                    <li>Profil sayfasinda <strong>Sifre Degistir</strong> bolumune gidin.</li>
+                    <li><strong>Mevcut Sifre</strong>'nizi girin (zorunlu dogrulama).</li>
+                    <li>Yeni sifrenizi iki kez yazin.</li>
+                    <li>Sifre guc gostergesi yeni sifrenizin guvenligini gosterir.</li>
+                </ol>
+            </div>
+        </div>
+
+        @* ═══════════════ SISTEM AYARLARI ═══════════════ *@
+        <div class="yi-card mb-4" id="sistem-ayarlari">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-gear text-primary me-2"></i>Sistem Ayarlari</h4>
+                <p>
+                    Yonetici rolundeki kullanicilar icin erisebilir olan sistem yapilandirma sayfasidir.
+                </p>
+
+                <h6 class="mt-3">Mevcut Ayarlar</h6>
+                <ul>
+                    <li><strong>Email Bildirimleri:</strong> SMTP yapilandirmasi ve bildirim tercihleri.</li>
+                    <li><strong>Telegram Entegrasyonu:</strong> Bot token ve chat ID yapilandirmasi.</li>
+                    <li><strong>KPI Hedefleri:</strong> Dashboard'daki KPI kartlari icin hedef degerler tanimlayin.</li>
+                    <li><strong>Taxonomy/Lookup:</strong> Gorev durumlari, oncelikler, departmanlar gibi sistem degerlerini yonetin.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ DENETIM IZI ═══════════════ *@
+        <div class="yi-card mb-4" id="denetim-izi">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-shield-lock text-primary me-2"></i>Denetim Izi (Audit Log)</h4>
+                <p>
+                    Sistemdeki tum onemli islemler otomatik olarak kaydedilir. Denetim Izi sayfasi yalnizca
+                    <strong>Genel Mudur</strong> rolune sahip kullanicilara aciktir.
+                </p>
+                <ul>
+                    <li><strong>Kayit Icerigi:</strong> Kim, ne zaman, hangi islemi yapti.</li>
+                    <li><strong>Filtreleme:</strong> Tarih araligi, kullanici ve islem tipine gore filtreleyebilirsiniz.</li>
+                    <li><strong>Detay:</strong> Her kaydin detayinda eski ve yeni degerler goruntulenir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ AI DASHBOARD (ADMIN) ═══════════════ *@
+        <div class="yi-card mb-4" id="ai-dashboard">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-cpu text-primary me-2"></i>AI Dashboard (Yonetici)</h4>
+                <p>
+                    Yonetim menusunden erisilen bu sayfa, AI sisteminin performans metriklerini gosterir.
+                    Yalnizca yonetici rolundeki kullanicilar erisebilir.
+                </p>
+                <ul>
+                    <li><strong>Skill Kullanim Istatistikleri:</strong> Hangi skill'ler ne siklikta kullaniliyor.</li>
+                    <li><strong>Ortalama Guven Skoru:</strong> AI cevaplarinin ortalama guven duzeyi.</li>
+                    <li><strong>Geri Bildirim Dagilimi:</strong> Olumlu/olumsuz geri bildirim orani.</li>
+                    <li><strong>Cevap Suresi:</strong> AI yanit suresi istatistikleri.</li>
+                    <li><strong>En Cok Kullanilan Skill'ler:</strong> Skill bazinda siralama.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ KISAYOLLAR VE IPUCLARI ═══════════════ *@
+        <div class="yi-card mb-4" id="ipuclari">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-lightbulb text-warning me-2"></i>Ipuclari ve Kisayollar</h4>
+
+                <h6 class="mt-3">Klavye Kisayollari</h6>
+                <table class="table table-sm small">
+                    <thead><tr><th>Kisayol</th><th>Islem</th></tr></thead>
+                    <tbody>
+                        <tr><td><kbd>Ctrl</kbd> + <kbd>K</kbd></td><td>CommandBar'i ac (AI ile etkilesim)</td></tr>
+                        <tr><td><kbd>Ctrl</kbd> + <kbd>Enter</kbd></td><td>Sorgu Editorunde sorguyu calistir</td></tr>
+                    </tbody>
+                </table>
+
+                <h6 class="mt-3">Genel Ipuclari</h6>
+                <ul>
+                    <li>Toplanti formunda <strong>Meet Ac</strong> butonu yeni bir Google Meet toplantisi acar.</li>
+                    <li>Karar formunda <strong>Goreve Donustur</strong> ile karari tek tikla is takip sistemine aktarin.</li>
+                    <li>Rapor listesindeki <i class="bi bi-star"></i> ikonu tiklanarak favori raporlariniza hizli erisim saglayin.</li>
+                    <li>Not etiketleri sol panelde filtre olarak gorunur — bir etikete tiklayarak ilgili notlari filtreleyin.</li>
+                    <li>Tekrarlayan ozel gunleri takvimde "Her Yil Tekrarla" ile sadece bir kez girmeniz yeterlidir.</li>
+                    <li>Dark/Light tema degisikligi icin ust cubukta yer alan tema degistirici butonunu kullanin.</li>
+                    <li>AI Sidebar'da sonuc begenmediyseniz, geri bildirim verin — sistem zamanla daha iyi sonuclar uretir.</li>
+                </ul>
+            </div>
+        </div>
+
+        @* ═══════════════ SSS ═══════════════ *@
+        <div class="yi-card mb-4" id="sss">
+            <div class="yi-card-body p-4">
+                <h4><i class="bi bi-question-circle text-primary me-2"></i>Sik Sorulan Sorular</h4>
+
+                @foreach (var faq in _faqs)
+                {
+                    <details class="mb-3">
+                        <summary class="fw-semibold" style="cursor:pointer; list-style:none;">
+                            <i class="bi bi-chevron-right me-1"></i>@faq.Question
+                        </summary>
+                        <p class="mt-2 ms-3 text-muted small">@faq.Answer</p>
+                    </details>
+                }
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    private record HelpSection(string Anchor, string Icon, string Title);
+    private record Faq(string Question, string Answer);
+    private record ChartTypeInfo(string Icon, string Name);
+
+    private readonly List<HelpSection> _sections =
+    [
+        new("giris",            "info-circle",          "YonetIQ Nedir?"),
+        new("ana-ekran",        "house-door",           "Ana Ekran"),
+        new("ai-sistemi",       "robot",                "AI Sistemi"),
+        new("gorevler",         "check2-square",        "Gorevler"),
+        new("toplantilar",      "calendar-event",       "Toplantilar"),
+        new("takvim",           "calendar3",            "Takvim"),
+        new("onay-merkezi",     "clipboard-check",      "Onay Merkezi"),
+        new("hedefler",         "bullseye",             "Hedefler (OKR)"),
+        new("mesajlar",         "chat-left-text",       "Mesajlar"),
+        new("notlarim",         "journal-text",         "Notlarim"),
+        new("raporlama",        "bar-chart-line",       "Raporlama"),
+        new("sorgu-editoru",    "code-square",          "Sorgu Editoru"),
+        new("set-yonetimi",     "collection",           "Set Yonetimi"),
+        new("kullanicilar",     "people",               "Kullanicilar"),
+        new("profil",           "person-circle",        "Profil"),
+        new("sistem-ayarlari",  "gear",                 "Sistem Ayarlari"),
+        new("denetim-izi",      "shield-lock",          "Denetim Izi"),
+        new("ai-dashboard",     "cpu",                  "AI Dashboard"),
+        new("ipuclari",         "lightbulb",            "Ipuclari"),
+        new("sss",              "question-circle",      "SSS"),
+    ];
+
+    private readonly List<ChartTypeInfo> _chartTypes =
+    [
+        new("table",                "Tablo"),
+        new("bar-chart",            "Cubuk Grafik"),
+        new("graph-up",             "Cizgi Grafik"),
+        new("graph-up-arrow",       "Alan Grafik"),
+        new("pie-chart",            "Pasta Grafik"),
+        new("circle",               "Donut Grafik"),
+        new("grid-3x3",             "Isı Haritasi"),
+        new("scatter",              "Dagılım Grafik"),
+        new("hexagon",              "Radar Grafik"),
+        new("speedometer2",         "KPI Kart"),
+        new("grid-1x2",             "Multi KPI"),
+        new("layout-three-columns", "Pivot Tablo"),
+    ];
+
+    private readonly List<Faq> _faqs =
+    [
+        new("AI ozellikleri calısmiyor, ne yapmaliyim?",
+            "Sistem yoneticinizden ortam degiskenine (GEMINI_API_KEY) Gemini API anahtarinin girilmesini isteyin. " +
+            "Anahtar yoksa sistem yerel bir fallback ozet uretir."),
+
+        new("CommandBar nasil acilir?",
+            "Herhangi bir sayfadayken Ctrl+K tuslarina basin. Acilan metin kutusuna dogal dilde isteginizi yazin. " +
+            "AI otomatik olarak en uygun skill'i secer ve sonucu gosterir."),
+
+        new("AI Sidebar nedir ve nasil kullanilir?",
+            "Gorev, toplanti, not, rapor, sorgu, onay ve OKR sayfalarinda gorunen 'AI Asistan' butonuna tiklayin. " +
+            "Sag tarafta acilan panelde o sayfaya ozel AI ozellikleri sunulur."),
+
+        new("AI cevabinin guven skoru dusuk, ne anlama gelir?",
+            "Dusuk guven skoru, AI'in sinirli bilgiyle cevap urettigini gosterir. Sonucu dogrulamaniz onerilir. " +
+            "Geri bildirim vererek zamanla AI'in kalibrasyonunu iyilestirebilirsiniz."),
+
+        new("Tekrarli toplantiyi silersem serinin tamami silinir mi?",
+            "Hayir. Yalnizca sildiginiz tek ornek silinir. Serinin diger ornekleri etkilenmez. " +
+            "Seriyi tamamen kaldirmak icin ana toplantiyi ve tum orneklerini manuel olarak silin."),
+
+        new("Ayni raporu birden fazla sete ekleyebilir miyim?",
+            "Evet. Bir sorgu kaydi, farkli setlere birden fazla kez eklenebilir. Her setin kendi siralama indeksi vardir."),
+
+        new("Notlarim baska kullanicilar tarafindan gorulebilir mi?",
+            "Hayir. Notlar tamamen kisiseldir; yalnizca notu olusturan kullanici gorebilir."),
+
+        new("Denetim Izi sayfasina neden erişemiyorum?",
+            "Denetim Izi sayfasi yalnizca 'Genel Mudur' rolune sahip kullanicilara aciktir."),
+
+        new("Sorgu Editorunde yazdigim SQL neden calismiyor?",
+            "DROP, TRUNCATE, DELETE, ALTER veya EXEC komutlari guvenlik nedeniyle engellenir. Yalnizca SELECT sorgularini kullanin. " +
+            "Ayrica sorguda parametre varsa (@@ParamAdi), calistirmadan once parametre formu doldurulmalidir."),
+
+        new("Gorev hatirlatmalari nasil calisir?",
+            "Mevcut surumde hatirlatmalar yalnizca Notlarim modulundedir. " +
+            "Sayfa acildiginda suresi gecmis ve kapatilmamis hatirlatmalar uyari cubugunda gosterilir."),
+
+        new("Dark mode nasil etkinlestirilir?",
+            "Ust cubukta (topbar) yer alan ay/gunes ikonuna tiklayarak dark ve light tema arasinda gecis yapabilirsiniz."),
+
+        new("AI geri bildirimi ne ise yarar?",
+            "AI sonuclarinin altindaki basparmak yukari/asagi butonlarina tiklayarak geri bildirim verirsiniz. " +
+            "Bu bilgi AI'in 'altin hafizasina' kaydedilir ve gelecekteki sonuclarin kalitesini arttirir."),
+
+        new("OKR ilerlemesi nasil hesaplanir?",
+            "Key Result'lardaki guncel deger, baslangic ve hedef deger kullanilarak yuzde olarak hesaplanir. " +
+            "Objective ilerlemesi, altindaki tum Key Result'larin ortalamasidir."),
+
+        new("Onay surecinde bir asama reddedilirse ne olur?",
+            "Cok asamali onay surecinde herhangi bir asama reddedildiginde surecin tamami durdurulur. " +
+            "Talep sahibi bilgilendirilir ve gerekirse yeni talep olusturabilir."),
+    ];
+}

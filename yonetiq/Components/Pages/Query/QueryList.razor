@@ -1,0 +1,461 @@
+@page "/sorgu-listesi"
+@page "/sorgu-listesi/{SekmeSlug}"
+@inject QueryService QuerySvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+@* 
+    Sorgu Kütüphanesi Sayfası.
+    Sistemdeki tüm kayıtlı SQL sorgularını (Dashboard widget'ları ve Raporlar) listeler.
+    Kullanıcılar buradan yeni sorgu oluşturabilir, mevcutları düzenleyebilir veya silebilir.
+*@
+
+<PageTitle>Sorgu Listesi</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-code-square"
+          Title="Sorgu Kütüphanesi"
+          Subtitle="Kayıtlı SQL sorgularını yönet, düzenle ve setlerde kullan.">
+    <Actions>
+        @* Yeni bir sorgu oluşturmak için editör sayfasına yönlendirir *@
+        <a class="yi-btn-primary" href="/sorgu"><i class="bi bi-plus-lg"></i>Yeni Sorgu</a>
+        @* Listeyi veritabanından yeniden yükler *@
+        <button type="button" class="yi-btn-outline" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i>Yenile</button>
+    </Actions>
+</PageHero>
+
+<div class="yi-card">
+    <div class="yi-card-body p-4">
+        @* Sekme yapısı: Dashboard ve Rapor sorgularını ayırmak için kullanılır *@
+        <div class="d-flex flex-wrap align-items-center gap-2 mb-3">
+            <button type="button"
+                    class="@GetTabButtonClass(QueryListTab.Dashboard)"
+                    @onclick="() => ChangeTab(QueryListTab.Dashboard)">
+                <i class="bi bi-grid-1x2"></i>
+                Dashboard Sorguları
+                <span class="yi-badge yi-badge-light">@DashboardQueryCount</span>
+            </button>
+            <button type="button"
+                    class="@GetTabButtonClass(QueryListTab.Report)"
+                    @onclick="() => ChangeTab(QueryListTab.Report)">
+                <i class="bi bi-file-earmark-text"></i>
+                Rapor Sorguları
+                <span class="yi-badge yi-badge-light">@ReportQueryCount</span>
+            </button>
+            <span class="yi-muted-xs">HerIkisi seçilen sorgular iki sekmede de görünür.</span>
+        </div>
+
+        @* Arama ve Sıralama Filtreleri *@
+        @if (_activeTab == QueryListTab.Dashboard)
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-12 col-lg-7">
+                    <label class="yi-label">Dashboard Arama</label>
+                    <input class="yi-input" @bind="_dashboardSearch" @bind:event="oninput" placeholder="Ad, açıklama, tip veya SQL içinde ara" />
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="yi-label">Sıralama</label>
+                    <select class="yi-select" @bind="_dashboardSorting">
+                        <option value="@TabSorting.RecentFirst">Güncel -> Eski</option>
+                        <option value="@TabSorting.OldFirst">Eski -> Güncel</option>
+                        <option value="@TabSorting.ByNameAsc">Ad (A-Z)</option>
+                        <option value="@TabSorting.ByNameDesc">Ad (Z-A)</option>
+                        <option value="@TabSorting.ByType">Tipe Göre</option>
+                    </select>
+                </div>
+                <div class="col-12 col-lg-1 d-flex align-items-end">
+                    <button type="button" class="yi-btn-outline w-100" @onclick="DashboardFilterClear">Temizle</button>
+                </div>
+            </div>
+        }
+        else
+        {
+            <div class="row g-2 mb-3">
+                <div class="col-12 col-lg-7">
+                    <label class="yi-label">Rapor Arama</label>
+                    <input class="yi-input" @bind="_reportSearch" @bind:event="oninput" placeholder="Ad, açıklama, tip veya SQL içinde ara" />
+                </div>
+                <div class="col-12 col-lg-4">
+                    <label class="yi-label">Sıralama</label>
+                    <select class="yi-select" @bind="_reportSorting">
+                        <option value="@TabSorting.RecentFirst">Güncel -> Eski</option>
+                        <option value="@TabSorting.OldFirst">Eski -> Güncel</option>
+                        <option value="@TabSorting.ByNameAsc">Ad (A-Z)</option>
+                        <option value="@TabSorting.ByNameDesc">Ad (Z-A)</option>
+                        <option value="@TabSorting.ByType">Tipe Göre</option>
+                    </select>
+                </div>
+                <div class="col-12 col-lg-1 d-flex align-items-end">
+                    <button type="button" class="yi-btn-outline w-100" @onclick="ReportFilterClear">Temizle</button>
+                </div>
+            </div>
+        }
+
+        @{ var activeList = ActiveTabQueries; }
+        <div class="yi-muted-xs mb-2">Görünen kayıt: @activeList.Count / @ActiveTabTotalCount</div>
+
+        @if (_loading)
+        {
+            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+        }
+        else if (activeList.Count == 0)
+        {
+            <div class="yi-alert yi-alert-light" role="alert">@TabEmptyMessage</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                @* Dashboard Görünümü (Daha kompakt tablo) *@
+                @if (_activeTab == QueryListTab.Dashboard)
+                {
+                    <table class="yi-table">
+                        <thead>
+                            <tr>
+                                <th>Ad</th>
+                                <th>Widget Tipi</th>
+                                <th>Güncellenme</th>
+                                <th class="text-right">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var sorgu in activeList)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@sorgu.Name</div>
+                                        @if (!string.IsNullOrWhiteSpace(sorgu.Description))
+                                        {
+                                            <div class="yi-muted-xs mt-1">@TruncateText(sorgu.Description, 78)</div>
+                                        }
+                                    </td>
+                                    <td>
+                                        <div class="d-inline-flex gap-1 flex-wrap">
+                                            <span class="yi-badge yi-badge-light">@sorgu.ResultType</span>
+                                            @if (sorgu.UsagePurposeLookupId.HasValue)
+                                            {
+                                                <span class="yi-badge yi-badge-info">@GetUsagePurposeName(sorgu.UsagePurposeLookupId)</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>@sorgu.UpdatedAt.ToLocalTime().ToString("g")</td>
+                                    <td class="text-right">
+                                        <div class="d-inline-flex gap-2">
+                                            <a class="yi-btn-outline-primary yi-btn-sm" href="@($"/sorgu/{sorgu.Id}")">Düzenle</a>
+                                            <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(sorgu.Id)">Sil</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+                else
+                {
+                    @* Rapor Görünümü (Daha detaylı tablo) *@
+                    <table class="yi-table">
+                        <thead>
+                            <tr>
+                                <th>Ad</th>
+                                <th>Açıklama</th>
+                                <th>SQL Özeti</th>
+                                <th>Tip</th>
+                                <th>Güncellenme</th>
+                                <th class="text-right">İşlem</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var sorgu in activeList)
+                            {
+                                <tr>
+                                    <td class="fw-semibold">@sorgu.Name</td>
+                                    <td class="text-secondary">@TruncateText(sorgu.Description, 72)</td>
+                                    <td>
+                                        <code class="yi-code-inline">@GetSqlSummary(sorgu.SqlContent)</code>
+                                    </td>
+                                    <td>
+                                        <div class="d-inline-flex gap-1 flex-wrap">
+                                            <span class="yi-badge yi-badge-light">@sorgu.ResultType</span>
+                                            @if (sorgu.UsagePurposeLookupId.HasValue)
+                                            {
+                                                <span class="yi-badge yi-badge-info">@GetUsagePurposeName(sorgu.UsagePurposeLookupId)</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>@sorgu.UpdatedAt.ToLocalTime().ToString("g")</td>
+                                    <td class="text-right">
+                                        <div class="d-inline-flex gap-2">
+                                            <a class="yi-btn-outline-primary yi-btn-sm" href="@($"/sorgu/{sorgu.Id}")">Düzenle</a>
+                                            <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(sorgu.Id)">Sil</button>
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                }
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    // URL'den gelen sekme belirteci (dashboard veya rapor)
+    [Parameter] public string? SekmeSlug { get; set; }
+
+    // Sekme türleri
+    private enum QueryListTab
+    {
+        Dashboard,
+        Report
+    }
+
+    // Sıralama seçenekleri
+    private enum TabSorting
+    {
+        RecentFirst,
+        OldFirst,
+        ByNameAsc,
+        ByNameDesc,
+        ByType
+    }
+
+    private bool _loading = true;
+    private List<QueryRecord> _queries = [];
+    private QueryListTab _activeTab = QueryListTab.Dashboard;
+
+    // Filtreleme ve arama değişkenleri
+    private string _dashboardSearch = string.Empty;
+    private string _reportSearch = string.Empty;
+    private TabSorting _dashboardSorting = TabSorting.RecentFirst;
+    private TabSorting _reportSorting = TabSorting.RecentFirst;
+
+    /// <summary>
+    /// Aktif sekme ve filtrelere göre sorguları döner.
+    /// </summary>
+    private List<QueryRecord> ActiveTabQueries =>
+        _activeTab switch
+        {
+            QueryListTab.Dashboard => FilterAndSort(QueryListTab.Dashboard, _dashboardSearch, _dashboardSorting),
+            QueryListTab.Report => FilterAndSort(QueryListTab.Report, _reportSearch, _reportSorting),
+            _ => []
+        };
+
+    private int DashboardQueryCount =>
+        _queries.Count(s => ShouldShowInTab(s, QueryListTab.Dashboard));
+
+    private int ReportQueryCount =>
+        _queries.Count(s => ShouldShowInTab(s, QueryListTab.Report));
+
+    private int ActiveTabTotalCount =>
+        _activeTab == QueryListTab.Dashboard ? DashboardQueryCount : ReportQueryCount;
+
+    private string TabEmptyMessage =>
+        ActiveTabTotalCount == 0
+            ? (_activeTab == QueryListTab.Dashboard
+                ? "Dashboard sekmesi için sorgu bulunamadı."
+                : "Rapor sekmesi için sorgu bulunamadı.")
+            : "Filtreye uyan sorgu bulunamadı.";
+
+    private int _dashboardUsageId = 1;
+    private int _reportUsageId = 2;
+    private int _bothUsageId = 3;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Gerçek Lookup ID'lerini öğren
+        var lookups = await LookupSvc.ListByGroupAsync("QueryUsage");
+        if (lookups.Any())
+        {
+            _dashboardUsageId = lookups.FirstOrDefault(x => x.Value == "Dashboard")?.Id ?? 1;
+            _reportUsageId = lookups.FirstOrDefault(x => x.Value == "Report")?.Id ?? 2;
+            _bothUsageId = lookups.FirstOrDefault(x => x.Value == "Both")?.Id ?? 3;
+        }
+
+        // Sayfa ilk açıldığında tüm sorguları yükle
+        await LoadAsync();
+    }
+
+    protected override void OnParametersSet()
+    {
+        // URL parametresi değiştiğinde sekmeyi güncelle
+        _activeTab = ResolveTabSlug(SekmeSlug);
+    }
+
+    /// <summary>
+    /// Veritabanındaki tüm sorgu kayıtlarını asenkron olarak çeker.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await QuerySvc.GetAllQueriesAsync();
+        if (result.IsSuccess)
+        {
+            _queries = result.Data ?? [];
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+            _queries = [];
+        }
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Belirtilen sorguyu veritabanından siler.
+    /// </summary>
+    private async Task DeleteAsync(int id)
+    {
+        var result = await QuerySvc.DeleteQueryAsync(id);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Sorgu başarıyla silindi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    private void DashboardFilterClear()
+    {
+        _dashboardSearch = string.Empty;
+        _dashboardSorting = TabSorting.RecentFirst;
+    }
+
+    private void ReportFilterClear()
+    {
+        _reportSearch = string.Empty;
+        _reportSorting = TabSorting.RecentFirst;
+    }
+
+    /// <summary>
+    /// Verilen listeyi arama kriterlerine göre filtreler ve seçilen düzende sıralar.
+    /// </summary>
+    private List<QueryRecord> FilterAndSort(QueryListTab tab, string search, TabSorting sorting)
+    {
+        IEnumerable<QueryRecord> query = _queries.Where(s => ShouldShowInTab(s, tab));
+
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            query = query.Where(s => IsMatch(s, search));
+        }
+
+        query = sorting switch
+        {
+            TabSorting.OldFirst => query.OrderBy(s => s.UpdatedAt),
+            TabSorting.ByNameAsc => query.OrderBy(s => s.Name),
+            TabSorting.ByNameDesc => query.OrderByDescending(s => s.Name),
+            TabSorting.ByType => query.OrderBy(s => s.ResultType).ThenBy(s => s.Name),
+            _ => query.OrderByDescending(s => s.UpdatedAt)
+        };
+
+        return query.ToList();
+    }
+
+    /// <summary>
+    /// Arama anahtar kelimesinin sorgu özellikleriyle eşleşip eşleşmediğini kontrol eder.
+    /// </summary>
+    private static bool IsMatch(QueryRecord sorgu, string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+        {
+            return true;
+        }
+
+        var key = search.Trim();
+        return ContainsIgnoreCase(sorgu.Name, key)
+               || ContainsIgnoreCase(sorgu.Description, key)
+               || ContainsIgnoreCase(sorgu.SqlContent, key)
+               || sorgu.ResultType.Contains(key, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool ContainsIgnoreCase(string? source, string key) =>
+        !string.IsNullOrWhiteSpace(source)
+        && source.Contains(key, StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// Sorgunun kullanım amacına göre (Dashboard/Rapor) ilgili sekmede görünüp görünmeyeceğini belirler.
+    /// </summary>
+    private bool ShouldShowInTab(QueryRecord sorgu, QueryListTab tab) =>
+        tab switch
+        {
+            QueryListTab.Dashboard => sorgu.UsagePurposeLookupId == _dashboardUsageId || sorgu.UsagePurposeLookupId == _bothUsageId,
+            QueryListTab.Report => sorgu.UsagePurposeLookupId == _reportUsageId || sorgu.UsagePurposeLookupId == _bothUsageId,
+            _ => true
+        };
+
+    private string GetUsagePurposeName(int? id)
+    {
+        if (!id.HasValue) return "Listelenmiyor";
+        if (id.Value == _dashboardUsageId) return "Dashboard";
+        if (id.Value == _reportUsageId) return "Rapor";
+        if (id.Value == _bothUsageId) return "Her İkisi";
+        return $"Tanımsız ({id.Value})";
+    }
+
+    private string GetTabButtonClass(QueryListTab tab) =>
+        _activeTab == tab ? "yi-btn-primary" : "yi-btn-outline-primary";
+
+    /// <summary>
+    /// Sekmeler arası geçiş yapar ve URL'yi günceller.
+    /// </summary>
+    private void ChangeTab(QueryListTab tab)
+    {
+        _activeTab = tab;
+
+        var target = $"/sorgu-listesi/{GenerateTabSlug(tab)}";
+        var current = "/" + Nav.ToBaseRelativePath(Nav.Uri).Trim('/');
+
+        if (!string.Equals(current, target, StringComparison.OrdinalIgnoreCase))
+        {
+            Nav.NavigateTo(target);
+        }
+    }
+
+    private static QueryListTab ResolveTabSlug(string? slug) =>
+        slug?.Trim().ToLowerInvariant() switch
+        {
+            "rapor" => QueryListTab.Report,
+            "dashboard" => QueryListTab.Dashboard,
+            _ => QueryListTab.Dashboard
+        };
+
+    private static string GenerateTabSlug(QueryListTab tab) =>
+        tab switch
+        {
+            QueryListTab.Report => "rapor",
+            _ => "dashboard"
+        };
+
+    private static string TruncateText(string? text, int limit)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return "-";
+        }
+
+        var clean = text.Trim();
+        return clean.Length <= limit ? clean : clean[..limit] + "...";
+    }
+
+    private static string GetSqlSummary(string? sql)
+    {
+        if (string.IsNullOrWhiteSpace(sql))
+        {
+            return "-";
+        }
+
+        var singleLine = string.Join(' ', sql.Split(new[] { '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries));
+        return TruncateText(singleLine, 110);
+    }
+}
+
+
+
+
+
+
+
+

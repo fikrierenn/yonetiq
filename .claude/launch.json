@@ -1,0 +1,14 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "yonetiq",
+      "runtimeExecutable": "dotnet",
+      "runtimeArgs": ["run", "--project", "yonetiq", "--no-launch-profile", "--urls", "http://127.0.0.1:7116"],
+      "port": 7116,
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  ]
+}

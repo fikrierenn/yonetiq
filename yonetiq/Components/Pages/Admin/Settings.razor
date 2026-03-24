@@ -1,0 +1,343 @@
+@page "/ayarlar"
+@using YonetIQ.Data.Services
+@inject SettingsService SettingsSvc
+@inject EmailService EmailSvc
+@inject TelegramService TelegramSvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+@inject IToastService Toast
+
+<!--
+    Sistem Ayarları Sayfası.
+    SMTP (e-posta) ve Telegram bot ayarlarını yönetir.
+    Sadece "Genel Mudur" rolündeki kullanıcılar erişebilir.
+-->
+
+@if (_loading)
+{
+    <div class="d-flex justify-content-center align-items-center" style="min-height:200px">
+        <div class="spinner-border text-primary" role="status">
+            <span class="visually-hidden">Yükleniyor...</span>
+        </div>
+    </div>
+}
+else if (_accessDenied)
+{
+    <div class="yi-alert yi-alert-warning" role="alert">
+        <i class="bi bi-shield-exclamation me-2"></i>
+        Bu sayfaya erişim yetkiniz bulunmamaktadır.
+    </div>
+}
+else
+{
+    <div class="yi-page-header mb-4">
+        <div>
+            <h1 class="yi-page-title">
+                <i class="bi bi-gear me-2"></i>Sistem Ayarları
+            </h1>
+            <p class="yi-page-subtitle">E-posta ve Telegram entegrasyon ayarları</p>
+        </div>
+    </div>
+
+    @* Tab navigasyonu *@
+    <ul class="nav nav-tabs mb-4" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(_activeTab == "email" ? "active" : "")"
+                    type="button" @onclick='() => _activeTab = "email"'>
+                <i class="bi bi-envelope me-2"></i>E-posta (SMTP)
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link @(_activeTab == "telegram" ? "active" : "")"
+                    type="button" @onclick='() => _activeTab = "telegram"'>
+                <i class="bi bi-telegram me-2"></i>Telegram
+            </button>
+        </li>
+    </ul>
+
+    @* ── E-POSTA SEKMESİ ────────────────────────────────────────────────────── *@
+    @if (_activeTab == "email")
+    {
+        <div class="yi-card p-4" style="max-width:640px">
+            <h5 class="mb-3 fw-semibold">SMTP Bağlantı Ayarları</h5>
+
+            <div class="yi-form-group">
+                <label class="yi-label">SMTP Sunucusu</label>
+                <input type="text" class="yi-input" @bind="_emailHost"
+                       placeholder="smtp.office365.com" />
+            </div>
+
+            <div class="row g-3">
+                <div class="col-sm-4">
+                    <div class="yi-form-group">
+                        <label class="yi-label">Port</label>
+                        <input type="number" class="yi-input" @bind="_emailPort"
+                               placeholder="587" min="1" max="65535" />
+                    </div>
+                </div>
+                <div class="col-sm-8">
+                    <div class="yi-form-group">
+                        <label class="yi-label">SSL/TLS</label>
+                        <select class="yi-input" @bind="_emailUseSsl">
+                            <option value="true">Etkin (önerilen)</option>
+                            <option value="false">Devre Dışı</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="yi-form-group">
+                <label class="yi-label">Kullanıcı Adı / E-posta</label>
+                <input type="text" class="yi-input" @bind="_emailUsername"
+                       placeholder="noreply@sirket.com" autocomplete="username" />
+            </div>
+
+            <div class="yi-form-group">
+                <label class="yi-label">Şifre</label>
+                <div class="yi-input-password-wrap">
+                    <input type="@(_showEmailPwd ? "text" : "password")"
+                           class="yi-input" @bind="_emailPassword"
+                           placeholder="••••••••" autocomplete="new-password" />
+                    <button type="button" class="yi-password-toggle"
+                            @onclick="() => _showEmailPwd = !_showEmailPwd">
+                        <i class="bi bi-@(_showEmailPwd ? "eye-slash" : "eye")"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div class="row g-3">
+                <div class="col-sm-7">
+                    <div class="yi-form-group">
+                        <label class="yi-label">Gönderen E-posta</label>
+                        <input type="email" class="yi-input" @bind="_emailFromAddress"
+                               placeholder="noreply@sirket.com" />
+                    </div>
+                </div>
+                <div class="col-sm-5">
+                    <div class="yi-form-group">
+                        <label class="yi-label">Gönderen Adı</label>
+                        <input type="text" class="yi-input" @bind="_emailFromName"
+                               placeholder="YonetIQ" />
+                    </div>
+                </div>
+            </div>
+
+            @if (_emailTestResult is not null)
+            {
+                <div class="yi-alert @(_emailTestOk ? "yi-alert-success" : "yi-alert-warning") mb-3" role="alert">
+                    <i class="bi bi-@(_emailTestOk ? "check-circle" : "exclamation-circle") me-2"></i>
+                    @_emailTestResult
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="yi-btn-primary" @onclick="SaveEmailAsync" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-floppy me-1"></i>Kaydet
+                </button>
+                <button class="yi-btn-outline" @onclick="TestEmailAsync" disabled="@_testing">
+                    @if (_testing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-wifi me-1"></i>Bağlantıyı Test Et
+                </button>
+            </div>
+        </div>
+    }
+
+    @* ── TELEGRAM SEKMESİ ───────────────────────────────────────────────────── *@
+    @if (_activeTab == "telegram")
+    {
+        <div class="yi-card p-4" style="max-width:640px">
+            <h5 class="mb-3 fw-semibold">Telegram Bot Ayarları</h5>
+
+            <div class="yi-alert yi-alert-info mb-3" role="note">
+                <i class="bi bi-info-circle me-2"></i>
+                <strong>Bot oluşturmak için:</strong> Telegram'da <code>@@BotFather</code>'a mesaj gönderin,
+                <code>/newbot</code> yazın ve adımları takip edin.
+            </div>
+
+            <div class="yi-form-group">
+                <label class="yi-label">Bot Token <span class="text-danger">*</span></label>
+                <div class="yi-input-password-wrap">
+                    <input type="@(_showBotToken ? "text" : "password")"
+                           class="yi-input" @bind="_telegramBotToken"
+                           placeholder="7123456789:AAF..." autocomplete="off" />
+                    <button type="button" class="yi-password-toggle"
+                            @onclick="() => _showBotToken = !_showBotToken">
+                        <i class="bi bi-@(_showBotToken ? "eye-slash" : "eye")"></i>
+                    </button>
+                </div>
+                <small class="yi-form-hint">BotFather'dan alınan token, şifreli olarak saklanır.</small>
+            </div>
+
+            <div class="yi-form-group">
+                <label class="yi-label">Bot Kullanıcı Adı</label>
+                <div class="input-group">
+                    <span class="input-group-text">@@</span>
+                    <input type="text" class="yi-input" @bind="_telegramBotUsername"
+                           placeholder="YonetIQ_bot" />
+                </div>
+                <small class="yi-form-hint">Login Widget için gereklidir (@@ işareti olmadan).</small>
+            </div>
+
+            @if (_telegramTestResult is not null)
+            {
+                <div class="yi-alert @(_telegramTestOk ? "yi-alert-success" : "yi-alert-warning") mb-3" role="alert">
+                    <i class="bi bi-@(_telegramTestOk ? "check-circle" : "exclamation-circle") me-2"></i>
+                    @_telegramTestResult
+                </div>
+            }
+
+            <div class="d-flex gap-2 mt-3">
+                <button class="yi-btn-primary" @onclick="SaveTelegramAsync" disabled="@_saving">
+                    @if (_saving)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-floppy me-1"></i>Kaydet
+                </button>
+                <button class="yi-btn-outline" @onclick="TestTelegramAsync" disabled="@_testing">
+                    @if (_testing)
+                    {
+                        <span class="spinner-border spinner-border-sm me-2"></span>
+                    }
+                    <i class="bi bi-robot me-1"></i>Bot'u Test Et
+                </button>
+            </div>
+        </div>
+    }
+}
+
+@code {
+    private bool   _loading      = true;
+    private bool   _accessDenied = false;
+    private string _activeTab    = "email";
+    private bool   _saving       = false;
+    private bool   _testing      = false;
+
+    // E-posta alanları
+    private string? _emailHost;
+    private string? _emailPort;
+    private string? _emailUseSsl;
+    private string? _emailUsername;
+    private string? _emailPassword;
+    private string? _emailFromAddress;
+    private string? _emailFromName;
+    private bool    _showEmailPwd;
+    private string? _emailTestResult;
+    private bool    _emailTestOk;
+
+    // Telegram alanları
+    private string? _telegramBotToken;
+    private string? _telegramBotUsername;
+    private bool    _showBotToken;
+    private string? _telegramTestResult;
+    private bool    _telegramTestOk;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Yetki kontrolü
+        if (SessionSvc.ActiveUser?.Role != "Genel Müdür")
+        {
+            _accessDenied = true;
+            _loading = false;
+            return;
+        }
+
+        await LoadSettingsAsync();
+        _loading = false;
+    }
+
+    private async Task LoadSettingsAsync()
+    {
+        var email    = await SettingsSvc.GetGroupAsync("Email");
+        var telegram = await SettingsSvc.GetGroupAsync("Telegram");
+
+        _emailHost        = email.GetValueOrDefault("Email.Host");
+        _emailPort        = email.GetValueOrDefault("Email.Port") ?? "587";
+        _emailUseSsl      = email.GetValueOrDefault("Email.UseSsl") ?? "true";
+        _emailUsername    = email.GetValueOrDefault("Email.Username");
+        _emailPassword    = email.GetValueOrDefault("Email.Password");
+        _emailFromAddress = email.GetValueOrDefault("Email.FromAddress");
+        _emailFromName    = email.GetValueOrDefault("Email.FromName") ?? "YonetIQ";
+
+        _telegramBotToken    = telegram.GetValueOrDefault("Telegram.BotToken");
+        _telegramBotUsername = telegram.GetValueOrDefault("Telegram.BotUsername");
+    }
+
+    private async Task SaveEmailAsync()
+    {
+        _saving = true;
+        _emailTestResult = null;
+        var values = new Dictionary<string, string?>
+        {
+            ["Email.Host"]        = _emailHost,
+            ["Email.Port"]        = _emailPort,
+            ["Email.UseSsl"]      = _emailUseSsl,
+            ["Email.Username"]    = _emailUsername,
+            ["Email.Password"]    = _emailPassword,
+            ["Email.FromAddress"] = _emailFromAddress,
+            ["Email.FromName"]    = _emailFromName,
+        };
+        var result = await SettingsSvc.SetGroupAsync(values);
+        _saving = false;
+
+        if (result.IsSuccess)
+            Toast.ShowSuccess("E-posta ayarları kaydedildi.");
+        else
+            Toast.ShowError(result.Message ?? "Kayıt hatası.");
+    }
+
+    private async Task SaveTelegramAsync()
+    {
+        _saving = true;
+        _telegramTestResult = null;
+        var values = new Dictionary<string, string?>
+        {
+            ["Telegram.BotToken"]    = _telegramBotToken,
+            ["Telegram.BotUsername"] = _telegramBotUsername,
+        };
+        var result = await SettingsSvc.SetGroupAsync(values);
+        _saving = false;
+
+        if (result.IsSuccess)
+            Toast.ShowSuccess("Telegram ayarları kaydedildi.");
+        else
+            Toast.ShowError(result.Message ?? "Kayıt hatası.");
+    }
+
+    private async Task TestEmailAsync()
+    {
+        _testing = true;
+        _emailTestResult = null;
+        StateHasChanged();
+
+        var (ok, error) = await EmailSvc.TestConnectionAsync();
+        _emailTestOk     = ok;
+        _emailTestResult = ok
+            ? "Bağlantı başarılı! SMTP sunucusuna erişilebildi."
+            : $"Bağlantı hatası: {error}";
+
+        _testing = false;
+    }
+
+    private async Task TestTelegramAsync()
+    {
+        _testing = true;
+        _telegramTestResult = null;
+        StateHasChanged();
+
+        var (ok, botName, error) = await TelegramSvc.TestBotAsync();
+        _telegramTestOk     = ok;
+        _telegramTestResult = ok
+            ? $"Bot bağlantısı başarılı! Bot adı: {botName}"
+            : $"Bot hatası: {error}";
+
+        _testing = false;
+    }
+}

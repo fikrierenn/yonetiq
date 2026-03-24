@@ -1,0 +1,123 @@
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Models.AI
+@inject AiOrchestrationService AiOrchestration
+@inject SessionService SessionSvc
+
+<div class="yi-ai-sidebar @(_isOpen ? "open" : "")">
+    <div class="yi-ai-sidebar-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-stars yi-ai-icon"></i>
+            <span class="fw-semibold">AI Asistan</span>
+        </div>
+        <button class="btn btn-sm yi-btn-ghost" @onclick="Toggle">
+            <i class="bi @(_isOpen ? "bi-x-lg" : "bi-chevron-left")"></i>
+        </button>
+    </div>
+
+    @if (_isOpen)
+    {
+        <div class="yi-ai-sidebar-body">
+            @if (_response is not null)
+            {
+                <button class="btn btn-sm yi-btn-ghost mb-2" @onclick="ClearResult">
+                    <i class="bi bi-arrow-left"></i> Geri
+                </button>
+                <SkillResultCard Response="@_response" UserId="@SessionSvc.ActiveUser.UserId" />
+            }
+            else
+            {
+                <p class="text-muted small mb-2">Kullanilabilir yetenekler:</p>
+                @foreach (var skill in _availableSkills)
+                {
+                    <button class="yi-ai-skill-btn" @onclick="() => ExecuteSkill(skill)" disabled="@_processing">
+                        <i class="bi @skill.Icon"></i>
+                        <div>
+                            <div class="fw-semibold">@skill.Name</div>
+                            <div class="text-muted small">@skill.Description</div>
+                        </div>
+                    </button>
+                }
+
+                @if (_availableSkills.Count == 0)
+                {
+                    <div class="text-muted small">Bu modul icin henuz AI yetenegi tanimlanmamis.</div>
+                }
+            }
+
+            @if (_processing)
+            {
+                <div class="d-flex align-items-center gap-2 text-muted mt-3">
+                    <div class="spinner-border spinner-border-sm" role="status"></div>
+                    <span>Analiz ediliyor...</span>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string Module { get; set; } = string.Empty;
+    [Parameter] public Dictionary<string, object> Parameters { get; set; } = new();
+
+    private bool _isOpen;
+    private bool _processing;
+    private AiResponse? _response;
+    private List<SkillDefinition> _availableSkills = [];
+
+    public void Toggle()
+    {
+        _isOpen = !_isOpen;
+        if (_isOpen && _availableSkills.Count == 0)
+        {
+            LoadSkills();
+        }
+        StateHasChanged();
+    }
+
+    public void Open()
+    {
+        _isOpen = true;
+        LoadSkills();
+        StateHasChanged();
+    }
+
+    private void LoadSkills()
+    {
+        _availableSkills = AiOrchestration.GetAvailableSkills(Module);
+    }
+
+    private void ClearResult()
+    {
+        _response = null;
+    }
+
+    private async Task ExecuteSkill(SkillDefinition skill)
+    {
+        if (!SessionSvc.IsLoggedIn) return;
+
+        _processing = true;
+        _response = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new AiRequest
+            {
+                SkillId = skill.Id,
+                UserId = SessionSvc.ActiveUser.UserId,
+                Module = Module,
+                Parameters = Parameters
+            };
+            _response = await AiOrchestration.ProcessRequestAsync(request);
+        }
+        catch (Exception)
+        {
+            _response = AiResponse.Failure("AI analizi sirasinda hata olustu.");
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+}

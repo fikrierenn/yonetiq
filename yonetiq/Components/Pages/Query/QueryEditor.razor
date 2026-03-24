@@ -1,0 +1,680 @@
+@page "/sorgu"
+@page "/sorgu/{Id:int}"
+@inject QueryService QuerySvc
+@inject YonetIQ.Data.Services.AI.AiOrchestrationService AiOrchSvc
+@inject LookupService LookupSvc
+@inject DataSourceService DataSourceSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+@using YonetIQ.Components.Shared.AI
+
+@*
+    Sorgu Editörü Sayfası.
+    Kullanıcıların T-SQL sorguları yazmasına, AI desteğiyle sorgu üretmesine,
+    sorguları test etmesine ve kaydetmesine olanak tanır.
+*@
+
+<PageTitle>Sorgu Editörü</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-code-square"
+          Title="Sorgu Editörü"
+          Subtitle="T-SQL sorgularını çalıştır, sonuç tipini seç ve kaydederek setlerde kullan.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <a class="yi-btn-primary" href="/sorgu-listesi">Sorgu Listesi</a>
+        <a class="yi-btn-outline" href="/set-listesi">Set Yönetimi</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <div class="row g-3">
+        @* Sol Panel: Veritabanı tablo ve kolon şeması (alt bileşen) *@
+        <div class="col-12 col-xl-3">
+            <QuerySchemaPanel Schema="_schema" OnAppendSql="AppendSql" />
+        </div>
+
+        @* Sağ Panel: Sorgu Tasarımı ve Önizleme *@
+        <div class="col-12 col-xl-9">
+            <div class="yi-card mb-3">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title">Sorgu Tasarımı</h2>
+                </div>
+                <div class="yi-card-body p-3 p-lg-4">
+                    <div class="row g-3">
+                        <div class="col-12 col-lg-8">
+                            <label class="yi-label">Sorgu Adı</label>
+                            <input class="yi-input" @bind="_model.Name" placeholder="Örn: Aylık Satış Raporu" />
+                        </div>
+                        <div class="col-12 col-lg-4">
+                            <label class="yi-label">Sonuç Tipi (Görselleştirme)</label>
+                            <select class="yi-select" @bind="_model.ResultType">
+                                @foreach (var tip in _resultTypeLookups)
+                                {
+                                    <option value="@tip.Value">@tip.Value</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-lg-4">
+                            <label class="yi-label">Kullanım Amacı</label>
+                            <select class="yi-select" @bind="_model.UsagePurposeLookupId">
+                                <option value="">Seçiniz...</option>
+                                @foreach (var l in _usageLookups)
+                                {
+                                    <option value="@l.Id">@l.Value</option>
+                                }
+                            </select>
+                        </div>
+
+                        @* Veri Kaynağı Seçici *@
+                        <div class="col-12 col-lg-4">
+                            <label class="yi-label">
+                                <i class="bi bi-hdd-network me-1"></i>Veri Kaynağı
+                            </label>
+                            <select class="yi-select" @bind="_model.DataSourceId"
+                                    @bind:after="OnDataSourceChangedAsync">
+                                <option value="">Varsayılan (Uygulama Bağlantısı)</option>
+                                @foreach (var ds in _dataSources)
+                                {
+                                    <option value="@ds.Id">@ds.Name (@ds.ServerType)</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12">
+                            <label class="yi-label">Kısa Açıklama</label>
+                            <input class="yi-input" @bind="_model.Description" placeholder="Sorgunun ne işe yaradığını belirtin..." />
+                        </div>
+
+                        <div class="col-12 col-lg-4">
+                            <label class="yi-label">Grafik Rengi (hex)</label>
+                            <input class="yi-input" @bind="_model.Color" placeholder="#1976d2" />
+                        </div>
+
+                        @* Pivot Tablo seçildiyse ek ayarları göster *@
+                        @if (_model.ResultType == "PivotTable")
+                        {
+                            <div class="col-12 col-lg-4">
+                                <label class="yi-label">Pivot Satır Kolon</label>
+                                <input class="yi-input" @bind="_model.PivotRowColumn" />
+                            </div>
+                            <div class="col-12 col-lg-4">
+                                <label class="yi-label">Pivot Sütun Kolon</label>
+                                <input class="yi-input" @bind="_model.PivotColumnColumn" />
+                            </div>
+                            <div class="col-12 col-lg-4">
+                                <label class="yi-label">Pivot Değer Kolon</label>
+                                <input class="yi-input" @bind="_model.PivotValueColumn" />
+                            </div>
+                        }
+
+                        @* AI SQL Asistanı (alt bileşen) *@
+                        <QueryAiAssistant RequestText="_aiSqlRequest"
+                                           RequestTextChanged="OnAiSqlRequestChanged"
+                                           Generating="_aiGenerating"
+                                           DraftSql="_aiSqlDraft"
+                                           OnGenerate="HandleGenerateAiSql" />
+
+                        @* SQL Editör Alanı *@
+                        <div class="col-12">
+                            <label class="yi-label">SQL Sorgusu</label>
+                            <textarea class="yi-input yi-code-area" rows="12"
+                                      value="@_model.SqlContent"
+                                      @oninput="OnSqlChanged"></textarea>
+                        </div>
+
+                        @* DML / Uzman Modu Seçeneği *@
+                        <div class="col-12">
+                            <div class="form-check form-switch d-flex align-items-center gap-2 mb-0">
+                                <input class="form-check-input" type="checkbox" role="switch"
+                                       id="chkAllowDml"
+                                       checked="@_model.AllowDml"
+                                       @onchange="e => _model.AllowDml = (bool)(e.Value ?? false)" />
+                                <label class="form-check-label yi-text-main" for="chkAllowDml">
+                                    DML / Uzman Modu
+                                    <span class="badge bg-warning text-dark ms-1" style="font-size:0.7rem;">Dikkat</span>
+                                </label>
+                            </div>
+                            @if (_model.AllowDml)
+                            {
+                                <div class="yi-alert yi-alert-warning mt-2 d-flex align-items-start gap-2">
+                                    <i class="bi bi-exclamation-triangle-fill text-warning mt-1 flex-shrink-0"></i>
+                                    <div>
+                                        <strong>DML Modu etkin.</strong> Bu sorgu <code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code> ve <code>MERGE</code> komutları içerebilir.
+                                        Veriyi kalıcı olarak değiştirebilir — lütfen yalnızca güvendiğiniz sorgularda etkinleştirin.
+                                        DDL komutları (<code>DROP</code>, <code>TRUNCATE</code>, <code>ALTER</code> vb.) yine de engellenir.
+                                    </div>
+                                </div>
+                            }
+                        </div>
+
+                        @* Parametre özeti — parametre varsa Çalıştır modal açar *@
+                        @if (_paramInfos.Count > 0)
+                        {
+                            <div class="col-12">
+                                <div class="yi-alert yi-alert-secondary d-flex align-items-center gap-2 py-2">
+                                    <i class="bi bi-sliders text-primary"></i>
+                                    <span>Bu sorgu <strong>@_paramInfos.Count</strong> parametre içeriyor.</span>
+                                    <button type="button" class="btn btn-sm btn-outline-primary ms-auto"
+                                            @onclick="OpenParamModal">
+                                        <i class="bi bi-pencil-square me-1"></i>Parametreleri Düzenle
+                                    </button>
+                                </div>
+                            </div>
+                        }
+
+                        @* İşlem Butonları *@
+                        <div class="col-12 d-flex flex-wrap gap-2">
+                            <button type="button" class="yi-btn-primary" @onclick="ExecuteAsync">
+                                <i class="bi bi-play-fill"></i> Çalıştır / Test Et
+                            </button>
+                            <button type="button" class="yi-btn-success" @onclick="SaveAsync">
+                                <i class="bi bi-check-lg"></i> Kaydet
+                            </button>
+                            <button type="button" class="yi-btn-outline" @onclick="ClearFields">Temizle</button>
+                            <a class="yi-link d-inline-flex align-items-center" href="/sorgu-listesi">İptal / Listeye Git</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Önizleme kartı (alt bileşen) *@
+            <QueryPreviewCard Running="@_running"
+                              Result="@_queryResult"
+                              ResultType="@_model.ResultType"
+                              Color="@_model.Color"
+                              QueryId="@_model.Id"
+                              AiComment="@_aiComment" />
+        </div>
+    </div>
+}
+
+@* ───────── Parametre Giriş Modalı ───────── *@
+@if (_showParamModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" style="z-index:1050">
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content yi-card">
+                <div class="modal-header border-bottom" style="border-color:var(--yi-card-border)!important">
+                    <h5 class="modal-title">
+                        <i class="bi bi-sliders me-2 text-primary"></i>Sorgu Parametreleri
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showParamModal = false"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        @foreach (var p in _paramInfos)
+                        {
+                            <div class="col-12 col-md-6">
+                                <label class="yi-label">
+                                    <code>@@@p.Name</code>
+                                    @if (!string.IsNullOrEmpty(p.SqlType))
+                                    {
+                                        <span class="badge bg-secondary ms-1" style="font-size:.65rem;font-weight:500">@p.SqlType</span>
+                                    }
+                                </label>
+
+                                @if (p.InputType == "select")
+                                {
+                                    <select class="yi-select"
+                                            value="@p.Value"
+                                            @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty">
+                                        @foreach (var opt in p.Options)
+                                        {
+                                            <option value="@opt">@opt</option>
+                                        }
+                                    </select>
+                                }
+                                else if (p.InputType == "yesno")
+                                {
+                                    <select class="yi-select"
+                                            value="@p.Value"
+                                            @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty">
+                                        <option value="1">Evet</option>
+                                        <option value="0">Hayır</option>
+                                    </select>
+                                }
+                                else if (p.InputType == "date")
+                                {
+                                    <input type="date" class="yi-input"
+                                           value="@p.Value"
+                                           @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty" />
+                                }
+                                else if (p.InputType == "datetime")
+                                {
+                                    <input type="datetime-local" class="yi-input"
+                                           value="@p.Value"
+                                           @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty" />
+                                }
+                                else if (p.InputType == "number")
+                                {
+                                    <input type="number" step="1" class="yi-input"
+                                           value="@p.Value"
+                                           @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty" />
+                                }
+                                else if (p.InputType == "number-decimal")
+                                {
+                                    <input type="number" step="any" class="yi-input"
+                                           value="@p.Value"
+                                           @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty" />
+                                }
+                                else
+                                {
+                                    <input type="text" class="yi-input"
+                                           placeholder="Değer girin..."
+                                           value="@p.Value"
+                                           @onchange="e => p.Value = e.Value?.ToString() ?? string.Empty" />
+                                }
+
+                                @if (!string.IsNullOrEmpty(p.DefaultValue))
+                                {
+                                    <div class="yi-text-muted" style="font-size:.75rem;margin-top:.2rem">
+                                        Varsayılan: <em>@p.DefaultValue</em>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+                <div class="modal-footer border-top" style="border-color:var(--yi-card-border)!important">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showParamModal = false">Kapat</button>
+                    <button type="button" class="yi-btn-primary" @onclick="RunFromParamModal" disabled="@_running">
+                        @if (_running)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-play-fill me-1"></i>
+                        }
+                        Çalıştır
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="query" Parameters="@_aiParams" />
+
+@code {
+    // URL'den gelen Sorgu ID'si (düzenleme modundaysa)
+    [Parameter] public int? Id { get; set; }
+
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["queryId"] = Id ?? 0
+    };
+
+    private void ToggleAiSidebar()
+    {
+        _aiSidebar?.Toggle();
+    }
+
+    private bool _loading = true;
+    private bool _running;
+    private bool _aiGenerating;
+    private string _aiSqlRequest = string.Empty;
+    private string? _aiSqlDraft;
+    private int? _lastLoadedId;
+    private string? _aiComment;
+    
+    // Düzenlenen sorgu modeli
+    private QueryRecord _model = new() { Color = "#1976d2", ResultType = "Table" };
+
+    // Sorgu çalışma sonucu
+    private QueryResult? _queryResult;
+
+    // Veritabanı şema bilgisi
+    private Dictionary<string, List<string>> _schema = [];
+
+    // Kullanım amacı lookup listesi (Dashboard, Rapor, Her İkisi)
+    private List<Lookup> _usageLookups = [];
+
+    // Sonuç tipi lookup listesi (Table, BarChart, vb.)
+    private List<Lookup> _resultTypeLookups = [];
+
+    // Tespit edilen SQL parametreleri (tip bilgisi + değer)
+    private List<string> _detectedParams = [];           // geriye dönük uyumluluk
+    private Dictionary<string, string> _paramValues = []; // geriye dönük uyumluluk
+    private List<QueryParameterInfo> _paramInfos = [];
+
+    // Parametre modal durumu
+    private bool _showParamModal = false;
+
+    // Aktif veri kaynakları listesi
+    private List<YonetIQ.Data.Models.DataSource> _dataSources = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Sayfa açılışında şema, lookup listeleri ve veri kaynaklarını yükle
+        var schemaTask = QuerySvc.GetTableSchemaAsync();
+        var usageTask = LookupSvc.ListByGroupAsync("QueryUsage");
+        var resultTypeTask = LookupSvc.ListByGroupAsync("ResultType");
+        var dsTask = DataSourceSvc.GetAllAsync(onlyActive: true);
+        await Task.WhenAll(schemaTask, usageTask, resultTypeTask, dsTask);
+
+        if (schemaTask.Result.IsSuccess)
+            _schema = schemaTask.Result.Data ?? [];
+        else
+            Toast.ShowError(schemaTask.Result.Message);
+
+        _usageLookups = usageTask.Result;
+        _resultTypeLookups = resultTypeTask.Result;
+        _dataSources = dsTask.Result.Data ?? [];
+    }
+
+    /// <summary>
+    /// Veri kaynağı değiştiğinde şema panelini yeni sunucudan yeniler.
+    /// </summary>
+    private async Task OnDataSourceChangedAsync()
+    {
+        var schemaRes = await QuerySvc.GetTableSchemaAsync(_model.DataSourceId);
+        _schema = schemaRes.IsSuccess ? schemaRes.Data ?? [] : [];
+    }
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Aynı ID için tekrar yükleme yapma
+        if (_lastLoadedId == Id)
+        {
+            _loading = false;
+            return;
+        }
+
+        _loading = true;
+        _aiComment = null;
+        _aiSqlDraft = null;
+
+        if (Id.HasValue)
+        {
+            // Mevcut sorguyu veritabanından getir
+            var result = await QuerySvc.GetQueryAsync(Id.Value);
+            if (result.IsSuccess && result.Data is not null)
+            {
+                _model = result.Data;
+                // Yüklenen sorgunun parametrelerini tespit et
+                RefreshDetectedParams();
+                // Getirilen sorguyu hemen çalıştırarak önizlemeyi göster
+                await LoadPreviewAsync();
+            }
+            else
+            {
+                if (!result.IsSuccess) Toast.ShowError(result.Message);
+                _queryResult = null;
+            }
+        }
+        else
+        {
+            // Yeni sorgu modu: Modeli temizle
+            _model = new QueryRecord { Color = "#1976d2", ResultType = "Table" };
+            _queryResult = null;
+            _aiSqlRequest = string.Empty;
+        }
+
+        _lastLoadedId = Id;
+        _loading = false;
+    }
+
+    /// <summary>
+    /// SQL alanı her değiştiğinde parametreleri yeniden tespit eder.
+    /// </summary>
+    private void OnSqlChanged(ChangeEventArgs e)
+    {
+        _model.SqlContent = e.Value?.ToString() ?? string.Empty;
+        RefreshDetectedParams();
+    }
+
+    /// <summary>
+    /// Mevcut SQL içeriğindeki parametreleri tespit eder; tip ve seçenek bilgilerini
+    /// parse ederek _paramInfos listesini günceller. Mevcut kullanıcı değerleri korunur.
+    /// </summary>
+    private void RefreshDetectedParams()
+    {
+        var newParams = QueryService.DetectParameters(_model.SqlContent);
+
+        // _paramValues (eski uyumluluk)
+        foreach (var gone in _detectedParams.Except(newParams))
+            _paramValues.Remove(gone);
+        foreach (var added in newParams.Except(_detectedParams))
+            _paramValues[added] = string.Empty;
+        _detectedParams = newParams;
+
+        // Mevcut değerleri sakla
+        var prevValues = _paramInfos.ToDictionary(p => p.Name, p => p.Value, StringComparer.OrdinalIgnoreCase);
+
+        // SQL'den tip + seçenek bilgisi çıkar
+        _paramInfos = QueryService.ParseParameterInfo(_model.SqlContent);
+
+        // Daha önce kullanıcının girdiği değerleri koru
+        foreach (var p in _paramInfos)
+        {
+            if (prevValues.TryGetValue(p.Name, out var prev) && !string.IsNullOrEmpty(prev))
+                p.Value = prev;
+        }
+    }
+
+    /// <summary>
+    /// AI asistanı istek metni değiştiğinde çağrılır (iki yönlü bağlama için).
+    /// </summary>
+    private void OnAiSqlRequestChanged(string value)
+    {
+        _aiSqlRequest = value ?? string.Empty;
+    }
+
+    /// <summary>
+    /// Şema panelinden seçilen tablo veya kolon ismini SQL metin alanına ekler.
+    /// </summary>
+    private void AppendSql(string token)
+    {
+        _model.SqlContent = string.IsNullOrWhiteSpace(_model.SqlContent)
+            ? token
+            : $"{_model.SqlContent}\n{token}";
+    }
+
+    /// <summary>
+    /// Çalıştır butonuna tıklandığında: parametre varsa modal açar, yoksa direkt çalıştırır.
+    /// </summary>
+    private async Task ExecuteAsync()
+    {
+        if (_paramInfos.Count > 0)
+        {
+            _showParamModal = true;
+        }
+        else
+        {
+            await LoadPreviewAsync();
+        }
+    }
+
+    /// <summary>Modal içindeki "Çalıştır" butonuna basıldığında çalışır.</summary>
+    private async Task RunFromParamModal()
+    {
+        _showParamModal = false;
+        await LoadPreviewAsync();
+    }
+
+    /// <summary>Parametre modalını açar (düzenle butonu için).</summary>
+    private void OpenParamModal() => _showParamModal = true;
+
+    /// <summary>
+    /// SQL sorgusunu çalıştırır ve gerekirse pivot işlemi uygular.
+    /// </summary>
+    private async Task LoadPreviewAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.SqlContent))
+        {
+            _queryResult = null;
+            return;
+        }
+
+        _running = true;
+        _aiComment = null;
+
+        try
+        {
+            // Parametre değerlerini hazırla: _paramInfos öncelikli, boşları dahil etme
+            Dictionary<string, string>? activeParams = null;
+            if (_paramInfos.Count > 0)
+            {
+                var fromInfos = _paramInfos
+                    .Where(p => !string.IsNullOrWhiteSpace(p.Value))
+                    .ToDictionary(p => p.Name, p => p.Value);
+                if (fromInfos.Count > 0) activeParams = fromInfos;
+            }
+            else
+            {
+                var fromValues = _paramValues
+                    .Where(kv => !string.IsNullOrWhiteSpace(kv.Value))
+                    .ToDictionary(kv => kv.Key, kv => kv.Value);
+                if (fromValues.Count > 0) activeParams = fromValues;
+            }
+
+            // SQL sorgusunu seçili veri kaynağında parametrelerle birlikte çalıştır
+            var res = await QuerySvc.ExecuteAsync(
+                _model.SqlContent,
+                parameters: activeParams,
+                dataSourceId: _model.DataSourceId,
+                allowDml: _model.AllowDml);
+
+            // Eğer Pivot Tablo seçildiyse ve gerekli kolonlar girildiyse pivotla
+            if (_model.ResultType == "PivotTable"
+                && !string.IsNullOrWhiteSpace(_model.PivotRowColumn)
+                && !string.IsNullOrWhiteSpace(_model.PivotColumnColumn)
+                && !string.IsNullOrWhiteSpace(_model.PivotValueColumn))
+            {
+                res = QueryService.Pivot(res, _model.PivotRowColumn, _model.PivotColumnColumn, _model.PivotValueColumn);
+            }
+
+            _queryResult = res;
+        }
+        catch (Exception ex)
+        {
+            _queryResult = new QueryResult { ErrorMessage = $"Önizleme oluşturulamadı: {ex.Message}" };
+            Toast.ShowError("Önizleme oluşturulurken hata oluştu.");
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    /// <summary>
+    /// AI Üret butonu için parametresiz callback (EventCallback void/Task kabul eder).
+    /// </summary>
+    private void HandleGenerateAiSql() => _ = GenerateAiSqlAsync();
+
+    /// <summary>
+    /// Doğal dil istemini kullanarak AI skill sistemi ile SQL sorgusu üretir.
+    /// </summary>
+    private async Task GenerateAiSqlAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_aiSqlRequest))
+        {
+            Toast.ShowWarning("AI istemi boş olamaz.");
+            return;
+        }
+
+        _aiGenerating = true;
+
+        try
+        {
+            var aiRequest = new YonetIQ.Data.Models.AI.AiRequest
+            {
+                SkillId = "query.nl_to_sql",
+                UserInput = _aiSqlRequest,
+                Module = "query",
+                Parameters = new Dictionary<string, object>
+                {
+                    ["schema"] = _schema,
+                    ["queryId"] = _model.Id
+                }
+            };
+            var response = await AiOrchSvc.ProcessRequestAsync(aiRequest);
+
+            if (response.IsSuccess && !string.IsNullOrWhiteSpace(response.Content))
+            {
+                _aiSqlDraft = response.Content.Trim();
+                _model.SqlContent = _aiSqlDraft;
+                Toast.ShowSuccess("AI SQL taslağı SQL alanına aktarıldı.");
+            }
+            else
+            {
+                Toast.ShowWarning(response.ErrorMessage ?? "AI SQL üretimi başarısız.");
+            }
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"AI SQL üretimi başarısız: {ex.Message}");
+        }
+        finally
+        {
+            _aiGenerating = false;
+        }
+    }
+
+    /// <summary>
+    /// Sorguyu doğrular ve veritabanına kaydeder.
+    /// </summary>
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            Toast.ShowWarning("Sorgu adı zorunludur.");
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.SqlContent))
+        {
+            Toast.ShowWarning("SQL alanı boş olamaz.");
+            return;
+        }
+
+        // Servis üzerinden kaydet ve yeni ID'yi al
+        var result = await QuerySvc.SaveQueryAsync(_model);
+        
+        if (result.IsSuccess)
+        {
+            var id = result.Data;
+            _model.Id = id;
+
+            // Kayıt sonrası önizlemeyi tazele
+            await LoadPreviewAsync();
+
+            Toast.ShowSuccess("Sorgu kaydedildi ve önizleme güncellendi.");
+
+            // Eğer yeni bir kayıt oluşturulduysa URL'yi güncelle
+            if (Id != id)
+            {
+                Nav.NavigateTo($"/sorgu/{id}", forceLoad: false);
+            }
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// Tüm formu ve durumları varsayılan hale getirir.
+    /// </summary>
+    private void ClearFields()
+    {
+        _model = new QueryRecord { Color = "#1976d2", ResultType = "Table" };
+        _queryResult = null;
+        _aiComment = null;
+        _aiSqlDraft = null;
+        _aiSqlRequest = string.Empty;
+        _lastLoadedId = null;
+    }
+}

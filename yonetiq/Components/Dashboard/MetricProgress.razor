@@ -1,0 +1,64 @@
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-analytic-card h-100">
+            <div class="yi-card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="yi-analytic-label">AKSİYON ORANI</div>
+                    <div class="yi-analytic-period">Son 7 gün</div>
+                </div>
+                <div class="yi-analytic-value">@ActionRate%</div>
+                <div class="yi-analytic-sub">Planlanan görev ilerleme hızı</div>
+                <div class="yi-progress-line mt-2"><span style="width:@ActionRate%;"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-analytic-card h-100">
+            <div class="yi-card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="yi-analytic-label">KARAR YOĞUNLUĞU</div>
+                    <div class="yi-analytic-period">Tüm zamanlar</div>
+                </div>
+                <div class="yi-analytic-value">@DecisionDensity%</div>
+                <div class="yi-analytic-sub">Toplantı karar aksiyon seviyesi</div>
+                <div class="yi-progress-line mt-2"><span style="width:@DecisionDensity%;"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-analytic-card h-100">
+            <div class="yi-card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="yi-analytic-label">TAKVİM DOLULUK</div>
+                    <div class="yi-analytic-period">Aylık</div>
+                </div>
+                <div class="yi-analytic-value">@CalendarOccupancy%</div>
+                <div class="yi-analytic-sub">Planlanan olay yoğunluğu</div>
+                <div class="yi-progress-line mt-2"><span style="width:@CalendarOccupancy%;"></span></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-analytic-card h-100">
+            <div class="yi-card-body">
+                <div class="d-flex justify-content-between align-items-center">
+                    <div class="yi-analytic-label">PANEL HAZIRLIK</div>
+                    <div class="yi-analytic-period">Canlı</div>
+                </div>
+                <div class="yi-analytic-value">@PanelReadiness%</div>
+                <div class="yi-analytic-sub">Dashboard set kapsama seviyesi</div>
+                <div class="yi-progress-line mt-2"><span style="width:@PanelReadiness%;"></span></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int ActionRate { get; set; }
+    [Parameter] public int DecisionDensity { get; set; }
+    [Parameter] public int CalendarOccupancy { get; set; }
+    [Parameter] public int PanelReadiness { get; set; }
+}

@@ -1,0 +1,272 @@
+@using System.Globalization
+@using ApexCharts
+@using Microsoft.JSInterop
+
+@if (Result is null)
+{
+    return;
+}
+
+@if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="yi-alert yi-alert-warning" role="alert">
+        <i class="bi bi-exclamation-triangle me-2"></i>
+        @_error
+    </div>
+}
+else if (_series.Count == 0)
+{
+    <div class="yi-alert yi-alert-warning" role="alert">Grafik çizimi için uygun veri serisi bulunamadı.</div>
+}
+else
+{
+    @* ApexCharts Blazor Entegrasyonu - Geliştirilmiş Görsellik *@
+    <ApexChart TItem="Dictionary<string, object>" 
+               Options="_options"
+               Height="340"
+               Title="@Result.Name">
+        @foreach (var s in _series)
+        {
+            <ApexPointSeries TItem="Dictionary<string, object>"
+                             Items="@s.Items"
+                             Name="@s.Name"
+                             XValue="@(x => ReadX(x, s.XColumn))"
+                             YValue="@(x => ReadY(x, s.YColumn))"
+                             SeriesType="@_chartSeriesType" />
+        }
+    </ApexChart>
+}
+
+@code {
+    [Parameter, EditorRequired] public QueryResult Result { get; set; } = default!;
+    [Parameter, EditorRequired] public string ResultType { get; set; } = "Table";
+
+    [Inject] private IJSRuntime JSRuntime { get; set; } = default!;
+
+    private readonly List<SeriesDefinition> _series = [];
+    private SeriesType _chartSeriesType;
+    private ApexChartOptions<Dictionary<string, object>> _options = new();
+    private string? _error;
+
+    protected override void OnInitialized()
+    {
+        _options = CreateDefaultOptions(Mode.Light);
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            try 
+            {
+                var theme = await JSRuntime.InvokeAsync<string>("yiTheme.getTheme");
+                var mode = theme == "dark" ? Mode.Dark : Mode.Light;
+                _options = CreateDefaultOptions(mode);
+                StateHasChanged();
+            }
+            catch (Exception ex)
+            {
+                // Prerendering veya JS henüz hazır değilse tema alınamayabilir — sessizce yoksay
+                Console.Error.WriteLine($"[ApexRenderer] Tema okunurken hata: {ex.Message}");
+            }
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        InitializeChart();
+    }
+
+    private ApexChartOptions<Dictionary<string, object>> CreateDefaultOptions(Mode mode)
+    {
+        return new ApexChartOptions<Dictionary<string, object>>
+        {
+            Theme = new Theme { Mode = mode, Palette = PaletteType.Palette1 },
+            Chart = new Chart
+            {
+                Toolbar = new Toolbar { Show = false },
+                DropShadow = new DropShadow { Enabled = mode == Mode.Light, Top = 3, Left = 2, Blur = 4, Opacity = 0.1 }
+            },
+            Colors = ["#1976d2", "#2fb344", "#ed6c02", "#d32f2f", "#9c27b0", "#0288d1"],
+            Stroke = new Stroke { Curve = Curve.Smooth, Width = 3 },
+            DataLabels = new DataLabels { Enabled = false },
+            Xaxis = new XAxis { 
+                AxisBorder = new AxisBorder { Show = false }, 
+                Labels = new XAxisLabels { Style = new AxisLabelStyle { Colors = mode == Mode.Dark ? "#94a3b8" : "#64748b" } } 
+            },
+            Yaxis = new List<YAxis> { new YAxis { Labels = new YAxisLabels { Style = new AxisLabelStyle { Colors = mode == Mode.Dark ? "#94a3b8" : "#64748b" } } } },
+            Grid = new Grid { BorderColor = mode == Mode.Dark ? "#334155" : "#f1f1f1", StrokeDashArray = 4 },
+            Legend = new Legend { Position = LegendPosition.Top, HorizontalAlign = Align.Right, Labels = new LegendLabels { UseSeriesColors = true } }
+        };
+    }
+
+    /// <summary>
+    /// Ham veriyi grafik serilerine dönüştürür.
+    /// </summary>
+    private void InitializeChart()
+    {
+        _series.Clear();
+        _error = null;
+
+        if (Result.Columns.Count < 2)
+        {
+            _error = "Grafik gösterimi için en az iki sütun (Etiket ve Değer) gereklidir.";
+            return;
+        }
+
+        if (Result.Rows.Count == 0)
+        {
+            _error = "Grafik çizmek için herhangi bir veri satırı bulunamadı.";
+            return;
+        }
+
+        _chartSeriesType = MapResultTypeToSeries(ResultType);
+        var normalizedRows = NormalizeRows(Result.Rows);
+
+        switch (ResultType)
+        {
+            case "PieChart":
+            case "DonutChart":
+            case "ScatterChart":
+                _series.Add(new SeriesDefinition
+                {
+                    Name = Result.Columns[1],
+                    XColumn = Result.Columns[0],
+                    YColumn = Result.Columns[1],
+                    Items = normalizedRows
+                });
+                break;
+
+            case "HeatmapChart":
+                if (Result.Columns.Count < 3)
+                {
+                    _error = "Isı haritası (Heatmap) için en az 3 sütun gereklidir (X, Seri, Değer).";
+                    return;
+                }
+
+                var xCol = Result.Columns[0];
+                var sCol = Result.Columns[1];
+                var vCol = Result.Columns[2];
+
+                foreach (var group in normalizedRows.GroupBy(x => ReadX(x, sCol)))
+                {
+                    _series.Add(new SeriesDefinition
+                    {
+                        Name = string.IsNullOrWhiteSpace(group.Key) ? "Seri" : group.Key,
+                        XColumn = xCol,
+                        YColumn = vCol,
+                        Items = group.ToList()
+                    });
+                }
+                break;
+
+            default:
+                var firstCol = Result.Columns[0];
+                foreach (var col in Result.Columns.Skip(1))
+                {
+                    _series.Add(new SeriesDefinition
+                    {
+                        Name = col,
+                        XColumn = firstCol,
+                        YColumn = col,
+                        Items = normalizedRows
+                    });
+                }
+                break;
+        }
+    }
+
+    private static List<Dictionary<string, object>> NormalizeRows(List<Dictionary<string, object?>> rows)
+    {
+        return rows.Select(NormalizeRow).ToList();
+    }
+
+    private static Dictionary<string, object> NormalizeRow(Dictionary<string, object?> src)
+    {
+        var row = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase);
+        foreach (var kv in src)
+        {
+            row[kv.Key] = kv.Value ?? DBNull.Value;
+        }
+
+        return row;
+    }
+
+    private static SeriesType MapResultTypeToSeries(string type)
+    {
+        return type switch
+        {
+            "BarChart" => SeriesType.Bar,
+            "LineChart" => SeriesType.Line,
+            "AreaChart" => SeriesType.Area,
+            "PieChart" => SeriesType.Pie,
+            "DonutChart" => SeriesType.Donut,
+            "HeatmapChart" => SeriesType.Heatmap,
+            "ScatterChart" => SeriesType.Scatter,
+            "RadarChart" => SeriesType.Radar,
+            _ => SeriesType.Bar
+        };
+    }
+
+    private static string ReadX(Dictionary<string, object> row, string col)
+    {
+        if (!row.TryGetValue(col, out var val) || val is DBNull)
+        {
+            return string.Empty;
+        }
+
+        return val switch
+        {
+            DateTime dt => dt.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            DateTimeOffset dto => dto.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            _ => Convert.ToString(val, CultureInfo.InvariantCulture) ?? string.Empty
+        };
+    }
+
+    private static decimal ReadY(Dictionary<string, object> row, string col)
+    {
+        if (!row.TryGetValue(col, out var val) || val is DBNull)
+        {
+            return 0m;
+        }
+
+        return val switch
+        {
+            decimal d => d,
+            int i => i,
+            long l => l,
+            short s => s,
+            byte b => b,
+            float f => (decimal)f,
+            double db => (decimal)db,
+            bool b => b ? 1m : 0m,
+            _ => DecimalParse(val)
+        };
+    }
+
+    private static decimal DecimalParse(object val)
+    {
+        var text = Convert.ToString(val, CultureInfo.InvariantCulture);
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.InvariantCulture, out var inv))
+        {
+            return inv;
+        }
+
+        text = Convert.ToString(val, CultureInfo.GetCultureInfo("tr-TR"));
+        if (decimal.TryParse(text, NumberStyles.Any, CultureInfo.GetCultureInfo("tr-TR"), out var tr))
+        {
+            return tr;
+        }
+
+        return 0m;
+    }
+
+    private sealed class SeriesDefinition
+    {
+        public string Name { get; set; } = string.Empty;
+        public string XColumn { get; set; } = string.Empty;
+        public string YColumn { get; set; } = string.Empty;
+        public List<Dictionary<string, object>> Items { get; set; } = [];
+    }
+}
+

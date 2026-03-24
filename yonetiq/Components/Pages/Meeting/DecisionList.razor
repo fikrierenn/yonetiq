@@ -1,0 +1,100 @@
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@inject MeetingService MeetingSvc
+@inject IToastService Toast
+
+<table class="yi-table yi-table-hover align-middle">
+    <thead>
+        <tr>
+            <th>İçerik</th>
+            <th>Öncelik</th>
+            <th>Sorumlu</th>
+            <th>Bitiş</th>
+            <th>Görev</th>
+            <th>İşlem</th>
+        </tr>
+    </thead>
+    <tbody>
+        @foreach (var decision in Decisions)
+        {
+            <tr id="decision-@decision.Id" class="@(decision.IsConvertedToTask ? "yi-row-converted" : "")">
+                <td class="small">@decision.Content</td>
+                <td class="small">
+                    <span class="yi-badge @GetPriorityBadgeClass(decision.PriorityLookupId)">
+                        @GetLookupValue(decision.PriorityLookupId, Priorities)
+                    </span>
+                </td>
+                <td class="small">@decision.AssigneeName</td>
+                <td class="small">@decision.DueDate?.ToString("dd.MM.yyyy")</td>
+                <td>
+                    @if (decision.IsConvertedToTask)
+                    {
+                        <a href="/gorev/@decision.LinkedTaskId" class="yi-badge yi-badge-success text-decoration-none">
+                            <i class="bi bi-link-45deg"></i> Görev #@decision.LinkedTaskId
+                        </a>
+                    }
+                    else
+                    {
+                        <button class="yi-btn-sm yi-btn-outline" @onclick="() => OnConvertToTask.InvokeAsync(decision.Id)">
+                            <i class="bi bi-arrow-repeat"></i> Dönüştür
+                        </button>
+                    }
+                </td>
+                <td>
+                    <div class="d-flex gap-1">
+                        <button class="yi-btn-sm yi-btn-outline" @onclick="() => OnEdit.InvokeAsync(decision)">
+                            <i class="bi bi-pencil"></i>
+                        </button>
+                        <button class="yi-btn-sm yi-btn-outline text-danger" @onclick="() => OnDelete.InvokeAsync(decision.Id)">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                        <button class="yi-btn-sm @(ExpandedId == decision.Id ? "yi-btn-primary" : "yi-btn-outline")" 
+                                @onclick="() => OnToggleExpand.InvokeAsync(decision.Id)">
+                            <i class="bi @(ExpandedId == decision.Id ? "bi-chevron-up" : "bi-chevron-down")"></i>
+                        </button>
+                    </div>
+                </td>
+            </tr>
+            @if (ExpandedId == decision.Id)
+            {
+                <tr>
+                    <td colspan="6" class="bg-light p-3 border-bottom">
+                        <div class="yi-card m-0 shadow-sm">
+                            <div class="yi-card-body p-3">
+                                <YonetIQ.Components.Shared.AttachmentManager EntityType="Decision" EntityId="@decision.Id" />
+                            </div>
+                        </div>
+                    </td>
+                </tr>
+            }
+        }
+    </tbody>
+</table>
+
+@code {
+    [Parameter] public List<Decision> Decisions { get; set; } = [];
+    [Parameter] public List<Lookup> Priorities { get; set; } = [];
+    [Parameter] public int? ExpandedId { get; set; }
+    [Parameter] public EventCallback<Decision> OnEdit { get; set; }
+    [Parameter] public EventCallback<int> OnDelete { get; set; }
+    [Parameter] public EventCallback<int> OnConvertToTask { get; set; }
+    [Parameter] public EventCallback<int> OnToggleExpand { get; set; }
+
+    private string GetLookupValue(int? id, List<Lookup> lookups)
+    {
+        if (id == null) return "Normal";
+        return lookups.FirstOrDefault(x => x.Id == id)?.Value ?? "Sistem";
+    }
+
+    private string GetPriorityBadgeClass(int? priorityId)
+    {
+        return priorityId switch
+        {
+            4 => "yi-badge-danger",  // Kritik
+            3 => "yi-badge-orange",  // Yuksek
+            2 => "yi-badge-primary", // Normal
+            1 => "yi-badge-secondary", // Dusuk
+            _ => "yi-badge-secondary"
+        };
+    }
+}

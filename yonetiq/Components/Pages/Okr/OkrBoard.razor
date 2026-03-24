@@ -1,0 +1,387 @@
+@page "/hedefler"
+@using YonetIQ.Components.Shared.AI
+@inject OkrService OkrSvc
+@inject UserService UserSvc
+@inject TaskService TaskSvc
+@inject SessionService SessionSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+<PageTitle>OKR — Hedefler</PageTitle>
+
+<PageHero Section="Strateji"
+          Icon="bi-trophy"
+          Title="OKR — Hedefler ve Temel Sonuçlar"
+          Subtitle="Şirket, departman ve bireysel hedefleri izleyin.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <button type="button" class="yi-btn-primary" @onclick="OpenCreateModal">
+            <i class="bi bi-plus-lg"></i> Yeni Hedef
+        </button>
+    </Actions>
+</PageHero>
+
+@* Filtreler *@
+<div class="d-flex flex-wrap gap-2 mb-3">
+    @foreach (var lvlItem in new[] { ("", "Tümü"), ("Company", "Şirket"), ("Department", "Departman"), ("Personal", "Kişisel") })
+    {
+        <button class="yi-btn-outline yi-btn-sm @(_filterLevel == lvlItem.Item1 ? "active" : "")"
+                @onclick='() => { _filterLevel = lvlItem.Item1; _ = LoadAsync(); }'>
+            @lvlItem.Item2
+        </button>
+    }
+    <select class="yi-select" style="width:auto" @bind="_filterYear" @bind:after="LoadAsync">
+        <option value="2025">2025</option>
+        <option value="2026">2026</option>
+        <option value="2027">2027</option>
+    </select>
+</div>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_objectives.Count == 0)
+{
+    <div class="yi-empty">Bu dönem için hedef tanımlanmamış.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var obj in _objectives)
+        {
+            <div class="col-12">
+                <div class="yi-card">
+                    <div class="yi-card-header d-flex justify-content-between align-items-start">
+                        <div>
+                            <span class="yi-badge yi-badge-light me-2">@obj.LevelLabel</span>
+                            <span class="yi-badge yi-badge-light me-2">@obj.Period @obj.Year</span>
+                            <span class="fw-bold">@obj.Title</span>
+                            @if (!string.IsNullOrEmpty(obj.OwnerName))
+                            {
+                                <span class="yi-muted small ms-2">· @obj.OwnerName</span>
+                            }
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            <span class="small fw-bold text-@obj.ProgressClass">%@obj.Progress.ToString("0")</span>
+                            <button class="yi-btn-outline yi-btn-sm" @onclick="() => OpenDetailModal(obj.Id)">
+                                <i class="bi bi-pencil"></i>
+                            </button>
+                            <button class="yi-btn-outline yi-btn-sm" style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                    @onclick="() => DeleteAsync(obj.Id)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="yi-card-body">
+                        @* Progress Bar *@
+                        <div class="progress mb-3" style="height:8px;border-radius:4px">
+                            <div class="progress-bar bg-@obj.ProgressClass"
+                                 role="progressbar"
+                                 style="width:@obj.Progress%"
+                                 aria-valuenow="@obj.Progress" aria-valuemin="0" aria-valuemax="100"></div>
+                        </div>
+
+                        @if (obj.KeyResults.Count == 0)
+                        {
+                            <div class="yi-muted small">Henüz anahtar sonuç eklenmemiş.</div>
+                        }
+                        else
+                        {
+                            <div class="row g-2">
+                                @foreach (var kr in obj.KeyResults)
+                                {
+                                    <div class="col-12 col-md-6">
+                                        <div class="p-2" style="background:var(--yi-card-bg);border:1px solid var(--yi-card-border);border-radius:.5rem">
+                                            <div class="d-flex justify-content-between align-items-start mb-1">
+                                                <span class="small fw-semibold">@kr.Title</span>
+                                                <span class="small text-@kr.ProgressClass fw-bold">%@kr.Progress.ToString("0")</span>
+                                            </div>
+                                            <div class="yi-muted" style="font-size:.75rem">@kr.CurrentDisplay</div>
+                                            <div class="progress mt-1" style="height:4px;border-radius:2px">
+                                                <div class="progress-bar bg-@kr.ProgressClass" style="width:@kr.Progress%"></div>
+                                            </div>
+                                            <div class="mt-1 d-flex align-items-center gap-1 flex-wrap">
+                                                @if (kr.MetricType != "Boolean")
+                                                {
+                                                    <input type="number" step="any" class="yi-input" style="font-size:.75rem;padding:.25rem .5rem;max-width:90px"
+                                                           value="@kr.CurrentValue"
+                                                           @onchange="e => UpdateKrAsync(kr.Id, decimal.TryParse(e.Value?.ToString(), out var v) ? v : kr.CurrentValue)" />
+                                                }
+                                                @if (kr.LinkedTaskId.HasValue)
+                                                {
+                                                    var linkedTask = _tasks.FirstOrDefault(t => t.Id == kr.LinkedTaskId.Value);
+                                                    <button class="yi-badge yi-badge-light d-inline-flex align-items-center gap-1"
+                                                            style="border:none;cursor:pointer;font-size:.7rem"
+                                                            title="Bağlı görev: @(linkedTask?.Title ?? "Görev #" + kr.LinkedTaskId)"
+                                                            @onclick='() => Nav.NavigateTo("/gorevler")'>
+                                                        <i class="bi bi-check2-square"></i>
+                                                        @(linkedTask?.Title?.Length > 22 ? linkedTask.Title[..22] + "…" : linkedTask?.Title ?? "Görev #" + kr.LinkedTaskId)
+                                                    </button>
+                                                }
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ─── Yeni/Düzenle Objective Modal ─── *@
+@if (_showObjectiveModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="objModalTitle">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="objModalTitle">
+                        <i class="bi bi-trophy me-2"></i>@(_editObj.Id == 0 ? "Yeni Hedef" : "Hedefi Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showObjectiveModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-4">
+                        <div class="col-12">
+                            <label class="yi-label">Hedef Başlığı</label>
+                            <input type="text" class="yi-input" @bind="_editObj.Title" placeholder="Hedefin açık ve ilham verici ifadesi" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="yi-label">Seviye</label>
+                            <select class="yi-select" @bind="_editObj.Level">
+                                <option value="Company">Şirket</option>
+                                <option value="Department">Departman</option>
+                                <option value="Personal">Kişisel</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="yi-label">Dönem</label>
+                            <select class="yi-select" @bind="_editObj.Period">
+                                <option value="Q1">Q1</option>
+                                <option value="Q2">Q2</option>
+                                <option value="Q3">Q3</option>
+                                <option value="Q4">Q4</option>
+                                <option value="H1">H1</option>
+                                <option value="H2">H2</option>
+                                <option value="Annual">Yıllık</option>
+                            </select>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="yi-label">Yıl</label>
+                            <input type="number" class="yi-input" @bind="_editObj.Year" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Sorumlu</label>
+                            <select class="yi-select" value="@(_editObj.OwnerId?.ToString() ?? "")"
+                                    @onchange="OnOwnerChanged">
+                                <option value="">Seçiniz (opsiyonel)</option>
+                                @foreach (var usr in _users)
+                                {
+                                    <option value="@usr.Id">@usr.FullName</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold small">Anahtar Sonuçlar (Key Results)</span>
+                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="AddKr">
+                            <i class="bi bi-plus me-1"></i>KR Ekle
+                        </button>
+                    </div>
+
+                    @foreach (var kr in _editObj.KeyResults)
+                    {
+                        <div class="yi-card mb-2 p-2">
+                            <div class="row g-2">
+                                <div class="col-12 col-md-5">
+                                    <input type="text" class="yi-input" @bind="kr.Title" placeholder="Ölçülebilir sonuç" />
+                                </div>
+                                <div class="col-md-2">
+                                    <select class="yi-select" @bind="kr.MetricType">
+                                        <option value="Number">Sayı</option>
+                                        <option value="Percentage">Yüzde</option>
+                                        <option value="Boolean">Evet/Hayır</option>
+                                    </select>
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="any" class="yi-input" @bind="kr.StartValue" placeholder="Başlangıç" />
+                                </div>
+                                <div class="col-md-2">
+                                    <input type="number" step="any" class="yi-input" @bind="kr.TargetValue" placeholder="Hedef" />
+                                </div>
+                                <div class="col-md-1 d-flex justify-content-end">
+                                    <button type="button" class="yi-btn-outline yi-btn-sm"
+                                            style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                            @onclick="() => RemoveKr(kr)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                                <div class="col-md-4">
+                                    <input type="text" class="yi-input" @bind="kr.Unit" placeholder="Birim (adet, %, TL...)" />
+                                </div>
+                                <div class="col-md-8">
+                                    <label class="yi-label d-flex align-items-center gap-1">
+                                        <i class="bi bi-check2-square"></i> Bağlı Görev
+                                        <span class="yi-muted" style="font-weight:400;font-size:.75rem">(tamamlanınca KR otomatik güncellenir)</span>
+                                    </label>
+                                    <select class="yi-select"
+                                            value="@(kr.LinkedTaskId?.ToString() ?? "")"
+                                            @onchange="e => OnKrTaskChanged(kr, e)">
+                                        <option value="">— Görev bağlama (opsiyonel) —</option>
+                                        @foreach (var task in _tasks)
+                                        {
+                                            <option value="@task.Id">@task.Title</option>
+                                        }
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+                    }
+
+                    @if (!string.IsNullOrEmpty(_objError))
+                    {
+                        <div class="yi-alert yi-alert-danger mt-2">@_objError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showObjectiveModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="SaveObjectiveAsync" disabled="@_saving">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <span>Kaydet</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="okr" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["objectiveId"] = _editObj?.Id ?? 0
+    };
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private bool _loading = true;
+    private bool _showObjectiveModal;
+    private bool _saving;
+    private string? _objError;
+    private string _filterLevel = "";
+    private int _filterYear = 2026;
+
+    private List<Objective> _objectives = [];
+    private List<User> _users = [];
+    private List<TaskItem> _tasks = [];
+    private Objective _editObj = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uRes = await UserSvc.GetAllAsync();
+        _users = uRes.IsSuccess ? (uRes.Data ?? []) : [];
+
+        var tRes = await TaskSvc.ListAsync();
+        _tasks = tRes.IsSuccess ? (tRes.Data ?? []) : [];
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var res = await OkrSvc.ListAsync(_filterYear, null, string.IsNullOrEmpty(_filterLevel) ? null : _filterLevel);
+        if (res.IsSuccess && res.Data is not null)
+        {
+            _objectives = [];
+            foreach (var obj in res.Data)
+            {
+                var detail = await OkrSvc.GetWithKeyResultsAsync(obj.Id);
+                _objectives.Add(detail.IsSuccess && detail.Data is not null ? detail.Data : obj);
+            }
+        }
+        else _objectives = [];
+        _loading = false;
+    }
+
+    private void OpenCreateModal()
+    {
+        _editObj = new Objective { Year = _filterYear, KeyResults = [] };
+        _objError = null;
+        _showObjectiveModal = true;
+    }
+
+    private async Task OpenDetailModal(int id)
+    {
+        var res = await OkrSvc.GetWithKeyResultsAsync(id);
+        if (res.IsSuccess && res.Data is not null)
+        {
+            _editObj = res.Data;
+            _objError = null;
+            _showObjectiveModal = true;
+        }
+    }
+
+    private void OnOwnerChanged(ChangeEventArgs e)
+    {
+        var oid = int.TryParse(e.Value?.ToString(), out var parsed) ? parsed : 0;
+        _editObj.OwnerId = oid == 0 ? null : oid;
+        _editObj.OwnerName = _users.FirstOrDefault(u => u.Id == oid)?.FullName ?? string.Empty;
+    }
+
+    private void OnKrTaskChanged(KeyResult kr, ChangeEventArgs e)
+    {
+        var tid = int.TryParse(e.Value?.ToString(), out var parsed) ? parsed : 0;
+        kr.LinkedTaskId = tid == 0 ? null : tid;
+    }
+
+    private void AddKr() => _editObj.KeyResults.Add(new KeyResult { ObjectiveId = _editObj.Id });
+    private void RemoveKr(KeyResult kr) => _editObj.KeyResults.Remove(kr);
+
+    private async Task SaveObjectiveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editObj.Title)) { _objError = "Başlık zorunludur."; return; }
+
+        _saving = true;
+        _objError = null;
+        var userId = SessionSvc.ActiveUser.UserId;
+        var res = await OkrSvc.SaveObjectiveAsync(_editObj, userId);
+        if (res.IsSuccess)
+        {
+            var objId = res.Data;
+            foreach (var kr in _editObj.KeyResults.Where(k => !string.IsNullOrWhiteSpace(k.Title)))
+            {
+                kr.ObjectiveId = objId;
+                await OkrSvc.SaveKeyResultAsync(kr, userId);
+            }
+            _showObjectiveModal = false;
+            Toast.ShowSuccess("Hedef kaydedildi.");
+            await LoadAsync();
+        }
+        else _objError = res.Message ?? "Kayıt başarısız.";
+        _saving = false;
+    }
+
+    private async Task UpdateKrAsync(int krId, decimal value)
+    {
+        var userId = SessionSvc.ActiveUser.UserId;
+        await OkrSvc.UpdateKeyResultAsync(krId, value, userId);
+        await LoadAsync();
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var res = await OkrSvc.DeleteObjectiveAsync(id, SessionSvc.ActiveUser.UserId);
+        if (res.IsSuccess) { Toast.ShowSuccess("Hedef silindi."); await LoadAsync(); }
+        else Toast.ShowError(res.Message);
+    }
+}

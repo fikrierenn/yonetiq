@@ -1,0 +1,208 @@
+@page "/gorevler/kanban"
+@using YonetIQ.Components.Shared.AI
+@inject TaskService TaskSvc
+@inject IToastService Toast
+@inject SessionService SessionSvc
+@inject UserService UserSvc
+
+<!-- 
+    Görev Kanban Sayfası (Task Kanban).
+    Görevlerin durum bazlı akışını (Bekliyor, Devam Ediyor, Tamamlandı vb.) sütunlar halinde listeler.
+    Kullanıcılar tek ekranda tüm işlerin hangi aşamada olduğunu görebilir ve durum değişikliği yapabilir.
+-->
+
+<PageTitle>Görev Kanban</PageTitle>
+
+<PageHero Section="Görev Modülü"
+          Icon="bi-kanban"
+          Title="Görev Kanban"
+          Subtitle="Durum bazlı görev akışını tek ekranda yönetin.">
+    <Actions>
+        <a class="yi-btn-primary" href="/gorev/yeni">Yeni Görev</a>
+        <a class="yi-btn-outline" href="/gorevler">Liste Görünümü</a>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    // Veriler servis üzerinden çekilirken gösterilen yükleme barı.
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <div class="row g-3">
+        @* 
+           Sistemdeki temel durumları (Bekliyor, Devam Ediyor, Tamamlandı) temsil eden sütunlar. 
+           Not: Bu kısım Lookup tablosuna göre dinamikleştirilecektir.
+        *@
+        @foreach (var status in _statusLookups) 
+        {
+            var statusId = status.Id;
+            var statusName = status.Value;
+            
+            <div class="col-12 col-lg-4">
+                <div class="yi-card h-100">
+                    <div class="yi-card-header d-flex justify-content-between align-items-center">
+                        <h2 class="yi-card-title">@statusName</h2>
+                        @* Sütundaki toplam görev sayısını gösteren rozet *@
+                        <span class="yi-badge yi-badge-light">@GetListByStatus(statusId).Count</span>
+                    </div>
+                    <div class="yi-card-body kanban-column">
+                        @if (GetListByStatus(statusId).Count == 0)
+                        {
+                            <div class="yi-empty text-center p-3 text-muted small">Bu aşamada görev yok.</div>
+                        }
+                        else
+                        {
+                            @foreach (var task in GetListByStatus(statusId))
+                            {
+                                @* Her bir görev için küçük bilgi kartı *@
+                                <div class="yi-event-card mb-2 shadow-sm p-3 border-left-3">
+                                    <div class="yi-event-title fw-bold mb-1">@task.Title</div>
+                                    <div class="yi-event-detail small text-muted mb-2">
+                                        <i class="bi bi-person me-1"></i>@task.AssigneeName
+                                    </div>
+                                    
+                                    @* Durum değiştirme hızlı aksiyon menüsü *@
+                                    <select class="yi-select yi-select-sm" 
+                                            value="@task.StatusLookupId" 
+                                            @onchange="(e => UpdateStatusAsync(task.Id, e.Value?.ToString()))">
+                                        @foreach (var s in _statusLookups)
+                                        {
+                                            <option value="@s.Id">@s.Value</option>
+                                        }
+                                    </select>
+                                </div>
+                            }
+                        }
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="task" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams = new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    // Sayfa yükleme durumu.
+    private bool _loading = true;
+
+    // Görevleri durum ID'lerine göre gruplanmış şekilde tutan sözlük.
+    private Dictionary<int, List<TaskItem>> _kanbanData = [];
+    private List<Lookup> _statusLookups = [];
+    private HashSet<int> _visibleUserIds = [];
+
+    private string _currentRole => SessionSvc.ActiveUser?.Role ?? string.Empty;
+    private bool IsAdmin       => _currentRole == "Genel Müdür";
+    private bool IsUnitManager => _currentRole is "Müdür" or "Direktör";
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BuildVisibleUserIdsAsync();
+        await LoadDataAsync();
+    }
+
+    private async Task BuildVisibleUserIdsAsync()
+    {
+        var uid = SessionSvc.ActiveUser?.UserId ?? 0;
+        if (IsAdmin) { _visibleUserIds = []; return; }
+        if (IsUnitManager)
+        {
+            var deptId = SessionSvc.ActiveUser?.DepartmentLookupId;
+            if (deptId.HasValue)
+            {
+                var deptUsers = await UserSvc.GetUsersByDepartmentAsync(deptId.Value);
+                _visibleUserIds = deptUsers.Select(u => u.Id).ToHashSet();
+                return;
+            }
+        }
+        _visibleUserIds = [uid];
+    }
+
+    /// <summary>
+    /// Veritabanından görevleri çeker ve durumlarına göre gruplayarak hazırlar.
+    /// </summary>
+    private async Task LoadDataAsync()
+    {
+        _loading = true;
+
+        if (_statusLookups.Count == 0)
+        {
+            _statusLookups = await LookupSvc.ListByGroupAsync("TaskStatus");
+        }
+
+        // Görünürlük kuralına göre görevleri çek
+        var result = await TaskSvc.ListAsync(
+            assigneeId: (!IsAdmin && _visibleUserIds.Count == 1) ? _visibleUserIds.First() : (int?)null);
+        
+        if (result.IsSuccess)
+        {
+            var tasks = result.Data ?? [];
+            // Birim amiri için departman filtresi (çok kullanıcı varsa client-side)
+            if (!IsAdmin && _visibleUserIds.Count > 1)
+                tasks = tasks.Where(t => t.AssigneeId.HasValue && _visibleUserIds.Contains(t.AssigneeId.Value)).ToList();
+
+            _kanbanData = tasks
+                .GroupBy(x => x.StatusLookupId)
+                .ToDictionary(g => g.Key, g => g.ToList());
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+            
+        _loading = false;
+    }
+    
+    @inject LookupService LookupSvc
+
+    /// <summary>
+    /// Belirli bir durum (status) altındaki görev listesini güvenli bir şekilde döndürür.
+    /// </summary>
+    private List<TaskItem> GetListByStatus(int statusId)
+    {
+        return _kanbanData.TryGetValue(statusId, out var list) ? list : [];
+    }
+
+    /// <summary>
+    /// Bir görevin durumunu asenkron olarak günceller ve ekranı yeniler.
+    /// </summary>
+    private async Task UpdateStatusAsync(int taskId, string? newStatusText)
+    {
+        if (int.TryParse(newStatusText, out var newStatusId))
+        {
+            // Görev servisi üzerinden durumu veritabanında güncelle.
+            var result = await TaskSvc.UpdateStatusAsync(taskId, newStatusId);
+            
+            if (result.IsSuccess)
+            {
+                // Başarılı toast mesajı göster.
+                Toast.ShowSuccess("Görev durumu güncellendi.");
+                
+                // Verileri güncel haliye tekrar yükle.
+                await LoadDataAsync();
+            }
+            else
+            {
+                Toast.ShowError(result.Message);
+            }
+        }
+    }
+}
+
+<style>
+    .kanban-column {
+        min-height: 400px;
+        background-color: var(--yi-bg-muted, #f8f9fa);
+        border-radius: 8px;
+    }
+    .border-left-3 {
+        border-left: 3px solid var(--yi-primary);
+    }
+</style>

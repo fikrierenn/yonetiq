@@ -1,0 +1,25 @@
+﻿  Geri y├╝klenecek projeler belirleniyor...
+  Geri y├╝kleme i├ğin t├╝m projeler g├╝ncel.
+D:\Dev\yonet\yonetiq\Components\Pages\Dashboard\Home.razor(176,14): error RZ9980: Unclosed tag 'DateTime' with no matching end tag. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Dashboard\Home.razor(176,14): warning RZ10012: Found markup element with unexpected name 'DateTime'. If this is intended to be a component, add a @using directive for its namespace. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\DecisionForm.razor(70,37): warning CS8601: Olas─▒ null ba┼şvuru atamas─▒. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\DecisionForm.razor(75,37): warning CS8625: Null sabit de─şer, bo┼ş de─şer atanamayan ba┼şvuru t├╝r├╝ne d├Ân├╝┼şt├╝r├╝lemiyor. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(89,33): error CS1061: 'UserService' bir 'ListAsync' tan─▒m─▒ i├ğermiyor ve 'UserService' t├╝r├╝nde bir ilk ba─ş─▒ms─▒z de─şi┼şken kabul eden hi├ğbir eri┼şilebilir 'ListAsync' geni┼şletme y├Ântemi bulunamad─▒ (bir kullanma y├Ânergeniz veya derleme ba┼şvurunuz eksik olabilir mi?) [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(97,79): error CS1061: 'MeetingService' bir 'ListDecisionsAsync' tan─▒m─▒ i├ğermiyor ve 'MeetingService' t├╝r├╝nde bir ilk ba─ş─▒ms─▒z de─şi┼şken kabul eden hi├ğbir eri┼şilebilir 'ListDecisionsAsync' geni┼şletme y├Ântemi bulunamad─▒ (bir kullanma y├Ânergeniz veya derleme ba┼şvurunuz eksik olabilir mi?) [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Data\Services\QueryService.cs(12,64): warning CS9113: 'lookupSvc' parametresi okunmam─▒┼ş. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(77,37): warning CS0414: 'MeetingDetail._showEditMeeting' alan─▒ atan─▒r ancak de─şeri hi├ğbir zaman kullan─▒lmaz [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+
+Olu┼şturma BA┼ŞARISIZ OLDU.
+
+D:\Dev\yonet\yonetiq\Components\Pages\Dashboard\Home.razor(176,14): warning RZ10012: Found markup element with unexpected name 'DateTime'. If this is intended to be a component, add a @using directive for its namespace. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\DecisionForm.razor(70,37): warning CS8601: Olas─▒ null ba┼şvuru atamas─▒. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\DecisionForm.razor(75,37): warning CS8625: Null sabit de─şer, bo┼ş de─şer atanamayan ba┼şvuru t├╝r├╝ne d├Ân├╝┼şt├╝r├╝lemiyor. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Data\Services\QueryService.cs(12,64): warning CS9113: 'lookupSvc' parametresi okunmam─▒┼ş. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(77,37): warning CS0414: 'MeetingDetail._showEditMeeting' alan─▒ atan─▒r ancak de─şeri hi├ğbir zaman kullan─▒lmaz [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Dashboard\Home.razor(176,14): error RZ9980: Unclosed tag 'DateTime' with no matching end tag. [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(89,33): error CS1061: 'UserService' bir 'ListAsync' tan─▒m─▒ i├ğermiyor ve 'UserService' t├╝r├╝nde bir ilk ba─ş─▒ms─▒z de─şi┼şken kabul eden hi├ğbir eri┼şilebilir 'ListAsync' geni┼şletme y├Ântemi bulunamad─▒ (bir kullanma y├Ânergeniz veya derleme ba┼şvurunuz eksik olabilir mi?) [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+D:\Dev\yonet\yonetiq\Components\Pages\Meeting\MeetingDetail.razor(97,79): error CS1061: 'MeetingService' bir 'ListDecisionsAsync' tan─▒m─▒ i├ğermiyor ve 'MeetingService' t├╝r├╝nde bir ilk ba─ş─▒ms─▒z de─şi┼şken kabul eden hi├ğbir eri┼şilebilir 'ListDecisionsAsync' geni┼şletme y├Ântemi bulunamad─▒ (bir kullanma y├Ânergeniz veya derleme ba┼şvurunuz eksik olabilir mi?) [D:\Dev\yonet\yonetiq\YonetIQ.csproj]
+    5 Uyar─▒
+    3 Hata
+
+Ge├ğen S├╝re 00:00:06.95

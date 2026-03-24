@@ -1,0 +1,42 @@
+@using YonetIQ.Data.Models
+@* Önizleme kartı: Sorgu sonucu (tablo/grafik), yükleniyor durumu ve AI analiz metni. *@
+<div class="yi-card">
+    <div class="yi-card-header d-flex justify-content-between align-items-center">
+        <h2 class="yi-card-title">Önizleme</h2>
+        @if (QueryId > 0)
+        {
+            <span class="yi-badge yi-badge-light">Kayıtlı Sorgu #@QueryId</span>
+        }
+    </div>
+    <div class="yi-card-body p-3 p-lg-4">
+        @if (Running)
+        {
+            <div class="yi-loading-bar" role="status" aria-label="Çalışıyor"></div>
+        }
+        else if (Result is null)
+        {
+            <div class="yi-empty">Çalıştır butonuyla önizleme oluştur.</div>
+        }
+        else
+        {
+            <ResultRenderer Result="@Result" ResultType="@ResultType" Color="@Color" />
+        }
+
+        @if (!string.IsNullOrWhiteSpace(AiComment))
+        {
+            <div class="yi-alert yi-alert-info mt-3">
+                <div class="fw-semibold mb-2"><i class="bi bi-info-circle"></i> AI Analizi</div>
+                <pre class="yi-pre">@AiComment</pre>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter] public bool Running { get; set; }
+    [Parameter] public QueryResult? Result { get; set; }
+    [Parameter] public string ResultType { get; set; } = "Table";
+    [Parameter] public string? Color { get; set; }
+    [Parameter] public int QueryId { get; set; }
+    [Parameter] public string? AiComment { get; set; }
+}

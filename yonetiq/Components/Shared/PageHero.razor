@@ -1,0 +1,38 @@
+<div class="yi-page-hero">
+    <div class="yi-page-hero-body">
+        <div class="yi-page-hero-content">
+            @if (!string.IsNullOrWhiteSpace(Section))
+            {
+                <div class="yi-page-pretitle">@Section</div>
+            }
+
+            <h1 class="yi-page-title mb-1 d-flex align-items-center gap-2">
+                @if (!string.IsNullOrWhiteSpace(Icon))
+                {
+                    <i class="bi @Icon"></i>
+                }
+                <span>@Title</span>
+            </h1>
+
+            @if (!string.IsNullOrWhiteSpace(Subtitle))
+            {
+                <p class="yi-page-subtitle mb-0">@Subtitle</p>
+            }
+        </div>
+
+        @if (Actions is not null)
+        {
+            <div class="yi-page-actions d-flex flex-wrap gap-2">
+                @Actions
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter] public string Subtitle { get; set; } = string.Empty;
+    [Parameter] public string Section { get; set; } = "Yonetim Modulu";
+    [Parameter] public string? Icon { get; set; } = "bi-grid-1x2-fill";
+    [Parameter] public RenderFragment? Actions { get; set; }
+}

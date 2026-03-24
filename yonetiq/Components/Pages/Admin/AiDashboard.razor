@@ -1,0 +1,279 @@
+@page "/admin/ai-dashboard"
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Models.AI
+@inject AiEvaluationService EvalService
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<PageTitle>AI Dashboard</PageTitle>
+
+<PageHero Section="YÖNETİM"
+          Icon="bi-stars"
+          Title="AI Dashboard"
+          Subtitle="Yapay zeka skill performansı ve kullanım istatistikleri">
+    <Actions>
+        <button type="button" class="yi-btn-primary" @onclick="LoadAsync" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise"></i> Yenile
+        </button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="text-center py-5"><div class="spinner-border" role="status"></div></div>
+}
+else if (_model is not null)
+{
+    @* ── KPI Cards ────────────────────────────────────── *@
+    <div class="row g-3 mb-4">
+        <div class="col-md-3">
+            <div class="yi-card">
+                <div class="yi-card-body text-center">
+                    <div class="yi-kpi-icon mb-2"><i class="bi bi-chat-dots" style="font-size:1.5rem; color:var(--yi-text-link);"></i></div>
+                    <div class="fs-2 fw-bold" style="color:var(--yi-text-main);">@_model.TotalInteractions</div>
+                    <div class="small" style="color:var(--yi-text-muted);">Toplam Etkileşim</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="yi-card">
+                <div class="yi-card-body text-center">
+                    <div class="yi-kpi-icon mb-2"><i class="bi bi-hand-thumbs-up" style="font-size:1.5rem; color:var(--yi-text-link);"></i></div>
+                    <div class="fs-2 fw-bold" style="color:var(--yi-text-main);">@_model.TotalFeedback</div>
+                    <div class="small" style="color:var(--yi-text-muted);">Toplam Geri Bildirim</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="yi-card">
+                <div class="yi-card-body text-center">
+                    <div class="yi-kpi-icon mb-2"><i class="bi bi-speedometer2" style="font-size:1.5rem; color:var(--yi-text-link);"></i></div>
+                    <div class="fs-2 fw-bold" style="color:var(--yi-text-main);">@_model.AvgLatencyMs.ToString("N0") <small class="fs-6 fw-normal">ms</small></div>
+                    <div class="small" style="color:var(--yi-text-muted);">Ort. Gecikme</div>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="yi-card">
+                <div class="yi-card-body text-center">
+                    <div class="yi-kpi-icon mb-2"><i class="bi bi-check-circle" style="font-size:1.5rem; color:var(--yi-text-link);"></i></div>
+                    <div class="fs-2 fw-bold" style="color:var(--yi-text-main);">%@_model.OverallAcceptanceRate.ToString("N1")</div>
+                    <div class="small" style="color:var(--yi-text-muted);">Kabul Oranı</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* ── Skill Performans Tablosu ─────────────────────── *@
+    @if (_model.SkillStats.Count > 0)
+    {
+        <div class="yi-card mb-4">
+            <div class="yi-card-header d-flex align-items-center gap-2">
+                <i class="bi bi-lightning-charge"></i>
+                <span class="fw-semibold">Skill Performansı</span>
+            </div>
+            <div class="yi-card-body p-0">
+                <div class="table-responsive">
+                    <table class="yi-table">
+                        <thead>
+                            <tr>
+                                <th>Skill</th>
+                                <th>Kategori</th>
+                                <th>Modül</th>
+                                <th class="text-end">Çağrı</th>
+                                <th class="text-end">Ort. Gecikme</th>
+                                <th class="text-end">Kabul Oranı</th>
+                                <th class="text-end">Ort. Puan</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var skill in _model.SkillStats.OrderByDescending(s => s.TotalInvocations))
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="fw-semibold">@skill.SkillName</div>
+                                        <div class="small" style="color:var(--yi-text-muted);">@skill.SkillId</div>
+                                    </td>
+                                    <td><span class="yi-badge yi-badge-light">@skill.Category</span></td>
+                                    <td><span class="yi-badge yi-badge-primary">@skill.Module</span></td>
+                                    <td class="text-end">@skill.TotalInvocations</td>
+                                    <td class="text-end">@skill.AvgLatencyMs.ToString("N0") ms</td>
+                                    <td class="text-end">
+                                        @{ var pct = skill.AcceptanceRate * 100; }
+                                        <span class="@(pct >= 70 ? "text-success" : pct >= 40 ? "text-warning" : "text-danger")">
+                                            %@pct.ToString("N1")
+                                        </span>
+                                    </td>
+                                    <td class="text-end">
+                                        @if (skill.AvgRating > 0)
+                                        {
+                                            <span>@skill.AvgRating.ToString("N1") / 3</span>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:var(--yi-text-muted);">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ── Son Etkileşimler ─────────────────────────────── *@
+    <div class="yi-card mb-4">
+        <div class="yi-card-header d-flex align-items-center gap-2">
+            <i class="bi bi-clock-history"></i>
+            <span class="fw-semibold">Son Etkileşimler</span>
+        </div>
+        <div class="yi-card-body p-0">
+            <div class="table-responsive">
+                <table class="yi-table">
+                    <thead>
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Skill</th>
+                            <th>Modül</th>
+                            <th>Durum</th>
+                            <th class="text-end">Gecikme</th>
+                            <th class="text-end">Güven</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_model.RecentInteractions.Count == 0)
+                        {
+                            <tr><td colspan="6" class="text-center text-muted py-4">Henüz etkileşim kaydı yok.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var ix in _model.RecentInteractions)
+                            {
+                                <tr>
+                                    <td class="text-muted small">@ix.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td class="fw-semibold">@ix.SkillId</td>
+                                    <td><span class="yi-badge yi-badge-light">@ix.Module</span></td>
+                                    <td>
+                                        @if (ix.IsSuccess)
+                                        {
+                                            <span class="yi-badge yi-badge-success"><i class="bi bi-check-lg"></i> Başarılı</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="yi-badge yi-badge-danger"><i class="bi bi-x-lg"></i> Hata</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">@ix.LatencyMs ms</td>
+                                    <td class="text-end">%@((ix.ConfidenceScore * 100).ToString("N0"))</td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    @* ── Son Geri Bildirimler ─────────────────────────── *@
+    <div class="yi-card mb-4">
+        <div class="yi-card-header d-flex align-items-center gap-2">
+            <i class="bi bi-chat-left-heart"></i>
+            <span class="fw-semibold">Son Geri Bildirimler</span>
+        </div>
+        <div class="yi-card-body p-0">
+            <div class="table-responsive">
+                <table class="yi-table">
+                    <thead>
+                        <tr>
+                            <th>Tarih</th>
+                            <th>Skill</th>
+                            <th class="text-center">Puan</th>
+                            <th class="text-center">Kabul</th>
+                            <th class="text-center">Düzenlendi</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @if (_model.RecentFeedback.Count == 0)
+                        {
+                            <tr><td colspan="5" class="text-center text-muted py-4">Henüz geri bildirim yok.</td></tr>
+                        }
+                        else
+                        {
+                            @foreach (var fb in _model.RecentFeedback)
+                            {
+                                <tr>
+                                    <td class="text-muted small">@fb.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</td>
+                                    <td class="fw-semibold">@fb.SkillId</td>
+                                    <td class="text-center">
+                                        @for (var star = 1; star <= 3; star++)
+                                        {
+                                            <i class="bi @(star <= fb.Rating ? "bi-star-fill text-warning" : "bi-star")" style="font-size:0.85rem;"></i>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (fb.WasAccepted)
+                                        {
+                                            <i class="bi bi-check-circle-fill text-success"></i>
+                                        }
+                                        else
+                                        {
+                                            <i class="bi bi-x-circle text-danger"></i>
+                                        }
+                                    </td>
+                                    <td class="text-center">
+                                        @if (fb.WasEdited)
+                                        {
+                                            <i class="bi bi-pencil-square text-info"></i>
+                                        }
+                                        else
+                                        {
+                                            <span style="color:var(--yi-text-muted);">-</span>
+                                        }
+                                    </td>
+                                </tr>
+                            }
+                        }
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+}
+else
+{
+    <div class="yi-card">
+        <div class="yi-card-body text-center text-muted py-5">
+            <i class="bi bi-exclamation-triangle fs-3 d-block mb-2"></i>
+            Dashboard verileri yüklenemedi.
+        </div>
+    </div>
+}
+
+@code {
+    private AiDashboardModel? _model;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Yetki kontrolü — sadece Genel Müdür
+        if (SessionSvc.ActiveUser?.Role != "Genel Müdür")
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await EvalService.GetDashboardAsync();
+        if (result.IsSuccess)
+            _model = result.Data;
+        _loading = false;
+    }
+}

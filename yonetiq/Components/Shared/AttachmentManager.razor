@@ -1,0 +1,146 @@
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@using Blazored.Toast.Services
+@inject AttachmentService AttachmentSvc
+@inject SessionService SessionSvc
+@inject IToastService ToastSvc
+
+<div class="yi-attachment-manager">
+    <div class="d-flex align-items-center justify-content-between mb-3">
+        <h6 class="yi-section-title mb-0">
+            <i class="bi bi-paperclip me-1"></i> Dosya Ekleri
+        </h6>
+        <div class="yi-upload-trigger">
+            <label for="@($"fileUpload_{EntityId}")" class="yi-btn yi-btn-sm yi-btn-outline-primary mb-0 cursor-pointer">
+                <i class="bi bi-upload me-1"></i> Dosya Yükle
+            </label>
+            <InputFile id="@($"fileUpload_{EntityId}")" OnChange="HandleFileUpload" class="d-none" multiple />
+        </div>
+    </div>
+
+    @if (_loading)
+    {
+        <div class="py-2 text-center text-muted">
+            <div class="spinner-border spinner-border-sm" role="status"></div>
+        </div>
+    }
+    else if (_attachments == null || !_attachments.Any())
+    {
+        <div class="yi-empty py-3 text-center small">
+            Henüz dosya eklenmemiş.
+        </div>
+    }
+    else
+    {
+        <div class="list-group list-group-flush border rounded-lg overflow-hidden">
+            @foreach (var file in _attachments)
+            {
+                <div class="list-group-item d-flex align-items-center justify-content-between p-2">
+                    <div class="d-flex align-items-center min-w-0">
+                        <div class="yi-file-icon me-2">
+                            <i class="bi @GetFileIcon(file.ContentType) fs-5 text-primary"></i>
+                        </div>
+                        <div class="min-w-0">
+                            <div class="text-truncate fw-semibold small" title="@file.FileName">@file.FileName</div>
+                            <div class="yi-text-muted smaller">@FormatSize(file.FileSize) • @file.CreatedAt.ToString("dd.MM.yyyy HH:mm")</div>
+                        </div>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <a href="@file.StoragePath" target="_blank" class="yi-btn yi-btn-ghost yi-btn-sm text-primary" title="Görüntüle">
+                            <i class="bi bi-eye"></i>
+                        </a>
+                        <button class="yi-btn yi-btn-ghost yi-btn-sm text-danger" @onclick="() => DeleteFile(file.Id)" title="Sil">
+                            <i class="bi bi-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+</div>
+
+@code {
+    [Parameter] public string EntityType { get; set; } = string.Empty;
+    [Parameter] public int EntityId { get; set; }
+
+    private List<FileAttachment>? _attachments;
+    private bool _loading = true;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        await LoadAttachments();
+    }
+
+    private async Task LoadAttachments()
+    {
+        _loading = true;
+        var result = await AttachmentSvc.GetAttachmentsAsync(EntityType, EntityId);
+        if (result.IsSuccess)
+        {
+            _attachments = result.Data;
+        }
+        _loading = false;
+    }
+
+    private async Task HandleFileUpload(InputFileChangeEventArgs e)
+    {
+        var files = e.GetMultipleFiles();
+        foreach (var file in files)
+        {
+            var result = await AttachmentSvc.UploadAttachmentAsync(file, EntityType, EntityId, SessionSvc.ActiveUser?.UserId);
+            if (result.IsSuccess)
+            {
+                ToastSvc.ShowSuccess($"{file.Name} başarıyla yüklendi.");
+            }
+            else
+            {
+                ToastSvc.ShowError($"{file.Name} yüklenirken hata: {result.Message}");
+            }
+        }
+        await LoadAttachments();
+    }
+
+    private async Task DeleteFile(int id)
+    {
+        var result = await AttachmentSvc.DeleteAttachmentAsync(id);
+        if (result.IsSuccess)
+        {
+            ToastSvc.ShowInfo("Dosya silindi.");
+            await LoadAttachments();
+        }
+        else
+        {
+            ToastSvc.ShowError("Dosya silinemedi: " + result.Message);
+        }
+    }
+
+    private string GetFileIcon(string contentType) => contentType switch
+    {
+        var ct when ct.Contains("image") => "bi-file-earmark-image",
+        var ct when ct.Contains("pdf") => "bi-file-earmark-pdf",
+        var ct when ct.Contains("word") || ct.Contains("office") => "bi-file-earmark-word",
+        var ct when ct.Contains("excel") || ct.Contains("spreadsheet") => "bi-file-earmark-spreadsheet",
+        var ct when ct.Contains("zip") || ct.Contains("compressed") => "bi-file-earmark-zip",
+        _ => "bi-file-earmark"
+    };
+
+    private string FormatSize(long bytes)
+    {
+        string[] suffix = { "B", "KB", "MB", "GB" };
+        int i = 0;
+        double dblSByte = bytes;
+        if (bytes > 1024)
+        {
+            for (i = 0; i < suffix.Length && bytes >= 1024; i++, bytes /= 1024)
+            {
+                dblSByte = bytes / 1024.0;
+            }
+        }
+        return $"{dblSByte:0.##} {suffix[i]}";
+    }
+}
+
+<style>
+    .smaller { font-size: 0.72rem; }
+    .cursor-pointer { cursor: pointer; }
+</style>

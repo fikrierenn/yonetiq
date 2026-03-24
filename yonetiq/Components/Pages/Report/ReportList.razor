@@ -1,0 +1,262 @@
+@page "/raporlar"
+@using YonetIQ.Components.Shared.AI
+@inject ReportingService ReportSvc
+@inject IToastService Toast
+
+<PageTitle>Rapor Merkezi</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-bar-chart-line"
+          Title="Rapor Merkezi"
+          Subtitle="Raporları listeleyin, favorilerinize ekleyin ve analiz için çalıştırın.">
+    <Actions>
+        <a class="yi-btn-primary" href="/sorgu">Yeni Sorgu</a>
+        <button type="button" class="yi-btn-outline" @onclick="RefreshAsync">Yenile</button>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+    </Actions>
+</PageHero>
+
+<div class="yi-card mb-3">
+    <div class="yi-card-body p-4">
+        <div class="row g-3 align-items-end">
+            <div class="col-12 col-md-5">
+                <label class="yi-label">Rapor Ara</label>
+                <input class="yi-input" value="@_searchText"
+                       @oninput="OnSearchInput"
+                       placeholder="Ad veya açıklama..." />
+            </div>
+            <div class="col-12 col-md-3">
+                <label class="yi-label">Kategori</label>
+                <select class="yi-select" value="@_selectedCategory" @onchange="OnCategoryChanged">
+                    <option value="">Tüm Kategoriler</option>
+                    @foreach (var k in _model.Categories)
+                    {
+                        <option value="@k">@k</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-4 d-flex gap-2 align-items-end flex-wrap">
+                <div class="d-flex align-items-center gap-2">
+                    <input id="chk-favs" type="checkbox" class="yi-check" @bind="_onlyFavorites" />
+                    <label for="chk-favs" class="yi-label-inline">Sadece Favoriler</label>
+                </div>
+                <div class="d-flex align-items-center gap-2">
+                    <input id="chk-group" type="checkbox" class="yi-check" @bind="_groupByCategory" />
+                    <label for="chk-group" class="yi-label-inline">Grupla</label>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="yi-card">
+    <div class="yi-card-body p-4">
+        <div class="d-flex align-items-center justify-content-between mb-3">
+            <h2 class="yi-card-title">Rapor Listesi (@FilteredReports.Count)</h2>
+            <div class="d-flex gap-2">
+                @if (_groupByCategory)
+                {
+                    <span class="yi-badge yi-badge-light">@GroupedReports.Count Kategori</span>
+                }
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            <div class="yi-loading-bar" role="status"></div>
+        }
+        else if (FilteredReports.Count == 0)
+        {
+            <div class="yi-alert yi-alert-light">Kriterlere uygun rapor bulunamadı.</div>
+        }
+        else if (_groupByCategory)
+        {
+            @* Gruplu Görünüm *@
+            @foreach (var group in GroupedReports)
+            {
+                <details class="mb-3" open>
+                    <summary class="yi-group-header d-flex align-items-center gap-2 py-2 px-3 rounded cursor-pointer">
+                        <i class="bi @GetCategoryIcon(group.Key)"></i>
+                        <span class="fw-semibold">@group.Key</span>
+                        <span class="yi-badge yi-badge-light ms-auto">@group.Value.Count</span>
+                    </summary>
+                    <div class="yi-list-split list-unstyled mb-0 ps-2">
+                        @foreach (var rapor in group.Value)
+                        {
+                            @ReportRow(rapor)
+                        }
+                    </div>
+                </details>
+            }
+        }
+        else
+        {
+            @* Düz Liste Görünümü *@
+            <div class="yi-list-split list-unstyled mb-0">
+                @foreach (var rapor in FilteredReports)
+                {
+                    @ReportRow(rapor)
+                }
+            </div>
+        }
+    </div>
+</div>
+
+<style>
+    .yi-group-header {
+        background: var(--yi-bg-subtle);
+        border: 1px solid var(--yi-border);
+        cursor: pointer;
+        user-select: none;
+    }
+    .yi-group-header:hover { background: var(--yi-primary-subtle); }
+    details > summary { list-style: none; }
+    details > summary::marker, details > summary::-webkit-details-marker { display: none; }
+</style>
+
+<AiSidebar @ref="_aiSidebar" Module="query" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams = new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private bool _loading = true;
+    private bool _groupByCategory;
+    private bool _onlyFavorites;
+    private string _searchText = string.Empty;
+    private string _selectedCategory = string.Empty;
+    private ReportsIndexViewModel _model = new();
+
+    private RenderFragment ReportRow(QueryRecord rapor) => builder =>
+    {
+        var isFav = _model.FavoriteReportIds.Contains(rapor.Id);
+        builder.OpenElement(0, "div");
+        builder.AddAttribute(1, "class", "py-3 d-flex align-items-center gap-3");
+
+        // Favori butonu
+        builder.OpenElement(2, "button");
+        builder.AddAttribute(3, "type", "button");
+        builder.AddAttribute(4, "class", $"yi-star-btn {(isFav ? "is-active" : "")}");
+        builder.AddAttribute(5, "title", isFav ? "Favoriden kaldır" : "Favorilere ekle");
+        builder.AddAttribute(6, "onclick", EventCallback.Factory.Create(this, () => ToggleFavoriteAsync(rapor.Id, isFav)));
+        builder.OpenElement(7, "i");
+        builder.AddAttribute(8, "class", $"bi {(isFav ? "bi-star-fill" : "bi-star")}");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Link + Bilgi
+        builder.OpenElement(9, "a");
+        builder.AddAttribute(10, "class", "flex-fill min-w-0 text-decoration-none");
+        builder.AddAttribute(11, "href", $"/raporlar/calistir/{rapor.Id}");
+        builder.OpenElement(12, "div");
+        builder.AddAttribute(13, "class", "fw-semibold text-truncate text-dark");
+        builder.AddContent(14, rapor.Name);
+        builder.CloseElement();
+        builder.OpenElement(15, "div");
+        builder.AddAttribute(16, "class", "yi-muted text-truncate small");
+        builder.AddContent(17, rapor.Description);
+        builder.CloseElement();
+        builder.OpenElement(18, "div");
+        builder.AddAttribute(19, "class", "d-flex gap-2 mt-1");
+        builder.OpenElement(20, "span");
+        builder.AddAttribute(21, "class", "yi-badge yi-badge-light");
+        builder.AddContent(22, rapor.ResultType);
+        builder.CloseElement();
+        builder.CloseElement();
+        builder.CloseElement();
+
+        // Butonlar
+        builder.OpenElement(23, "div");
+        builder.AddAttribute(24, "class", "d-inline-flex gap-2");
+        builder.OpenElement(25, "a");
+        builder.AddAttribute(26, "class", "yi-btn-outline-primary yi-btn-sm");
+        builder.AddAttribute(27, "href", $"/raporlar/calistir/{rapor.Id}");
+        builder.OpenElement(28, "i"); builder.AddAttribute(29, "class", "bi bi-play-circle"); builder.CloseElement();
+        builder.AddContent(30, " Çalıştır");
+        builder.CloseElement();
+        builder.OpenElement(31, "a");
+        builder.AddAttribute(32, "class", "yi-btn-outline yi-btn-sm");
+        builder.AddAttribute(33, "href", $"/sorgu/{rapor.Id}");
+        builder.OpenElement(34, "i"); builder.AddAttribute(35, "class", "bi bi-pencil"); builder.CloseElement();
+        builder.AddContent(36, " Düzenle");
+        builder.CloseElement();
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private List<QueryRecord> FilteredReports
+    {
+        get
+        {
+            var list = _model.Reports;
+            if (_onlyFavorites)
+                list = list.Where(r => _model.FavoriteReportIds.Contains(r.Id)).ToList();
+            var q = _searchText.Trim().ToLowerInvariant();
+            if (!string.IsNullOrWhiteSpace(q))
+                list = list.Where(r =>
+                    (r.Name ?? "").ToLowerInvariant().Contains(q) ||
+                    (r.Description ?? "").ToLowerInvariant().Contains(q)).ToList();
+            if (!string.IsNullOrWhiteSpace(_selectedCategory))
+                list = list.Where(r => string.Equals(r.ResultType, _selectedCategory, StringComparison.OrdinalIgnoreCase)).ToList();
+            return list;
+        }
+    }
+
+    private Dictionary<string, List<QueryRecord>> GroupedReports =>
+        FilteredReports
+            .GroupBy(r => string.IsNullOrWhiteSpace(r.ResultType) ? "Diğer" : r.ResultType)
+            .OrderBy(g => g.Key)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var res = await ReportSvc.CreateListModelAsync(null, null);
+        if (res.IsSuccess && res.Data is not null)
+            _model = res.Data;
+        else
+            Toast.ShowError(res.Message);
+        _loading = false;
+    }
+
+    private void OnSearchInput(ChangeEventArgs e) =>
+        _searchText = e.Value?.ToString() ?? string.Empty;
+
+    private void OnCategoryChanged(ChangeEventArgs e) =>
+        _selectedCategory = e.Value?.ToString() ?? string.Empty;
+
+    private async Task RefreshAsync()
+    {
+        await LoadAsync();
+        Toast.ShowInfo("Rapor listesi yenilendi.");
+    }
+
+    private async Task ToggleFavoriteAsync(int raporId, bool mevcuttaFavori)
+    {
+        var result = await ReportSvc.ToggleFavoriteAsync(raporId, mevcuttaFavori);
+        if (!result.IsSuccess) { Toast.ShowWarning(result.Message); return; }
+        if (result.Data) Toast.ShowSuccess(result.Message); else Toast.ShowInfo(result.Message);
+        await LoadAsync();
+    }
+
+    private static string GetCategoryIcon(string category) => category switch
+    {
+        "Table" => "bi-table",
+        "PivotTable" => "bi-layout-three-columns",
+        "KpiCard" => "bi-card-text",
+        "MultiKpi" => "bi-grid-3x2-gap",
+        "BarChart" => "bi-bar-chart",
+        "LineChart" => "bi-graph-up",
+        "AreaChart" => "bi-graph-up-arrow",
+        "PieChart" => "bi-pie-chart",
+        "DonutChart" => "bi-pie-chart-fill",
+        "HeatmapChart" => "bi-grid-fill",
+        "ScatterChart" => "bi-diagram-3",
+        "RadarChart" => "bi-hexagon",
+        _ => "bi-file-bar-graph"
+    };
+}

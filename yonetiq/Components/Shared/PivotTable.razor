@@ -1,0 +1,16 @@
+@if (Result is null)
+{
+    return;
+}
+
+@* Pivot görünümü şu an için standart tabloya yönlendiriliyor *@
+<div class="yi-muted small mb-2"><i class="bi bi-info-circle me-1"></i> Pivot Tablo Görünümü</div>
+<DynamicTable Result="Result" />
+
+@code {
+    /// <summary>
+    /// Pivot formatında gösterilecek veri kümesi.
+    /// </summary>
+    [Parameter, EditorRequired] public QueryResult Result { get; set; } = default!;
+}
+

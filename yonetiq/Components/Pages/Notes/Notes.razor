@@ -1,0 +1,710 @@
+@page "/notlarim"
+@using YonetIQ.Components.Shared.AI
+@inject NoteService NoteSvc
+@inject TaskService TaskSvc
+@inject LookupService LookupSvc
+@inject NoteChatService NoteChatSvc
+@inject SessionService SessionSvc
+@inject IJSRuntime JS
+@inject IToastService Toast
+
+<PageTitle>Kişisel Notlarım</PageTitle>
+
+<PageHero Section="Platform"
+          Icon="bi-journal-text"
+          Title="Kişisel Notlarım"
+          Subtitle="Notlarını yönet, hatırlatma ekle, göreve dönüştür veya AI asistanla sohbet et.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <button class="yi-btn-primary" @onclick="NewNote">
+            <i class="bi bi-plus-lg"></i> Yeni Not
+        </button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else
+{
+    @* Aktif hatırlatmalar *@
+    @if (_dueReminders.Count > 0)
+    {
+        <div class="yi-alert yi-alert-warning mb-3">
+            <div class="fw-semibold mb-2"><i class="bi bi-bell-fill me-2"></i>Aktif Hatırlatmalar (@_dueReminders.Count)</div>
+            @foreach (var r in _dueReminders)
+            {
+                <div class="d-flex align-items-center justify-content-between gap-2 py-1 border-bottom">
+                    <div>
+                        <span class="fw-semibold">@r.Title</span>
+                        <span class="yi-muted ms-2 small">@r.ReminderAt?.ToString("dd.MM.yyyy HH:mm")</span>
+                    </div>
+                    <div class="d-flex gap-1">
+                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="() => SelectNote(r)">Aç</button>
+                        <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DismissReminderAsync(r)">Kapat</button>
+                    </div>
+                </div>
+            }
+        </div>
+    }
+
+    <div class="row g-3">
+        @* Sol: Not Listesi *@
+        <div class="col-12 col-lg-4">
+            <div class="yi-card h-100">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">Notlar</h2>
+                    <span class="yi-badge yi-badge-light">@_notes.Count</span>
+                </div>
+                <div class="yi-card-body p-2">
+                    @* Etiket filtresi *@
+                    @if (_allTags.Count > 0)
+                    {
+                        <div class="d-flex flex-wrap gap-1 p-2 border-bottom mb-1">
+                            <button type="button"
+                                    class="yi-badge @(_tagFilter == null ? "yi-badge-primary" : "yi-badge-light")"
+                                    @onclick="() => FilterByTag(null)">Tümü</button>
+                            @foreach (var tag in _allTags)
+                            {
+                                <button type="button"
+                                        class="yi-badge @(_tagFilter == tag ? "yi-badge-primary" : "yi-badge-light")"
+                                        @onclick="() => FilterByTag(tag)">@tag</button>
+                            }
+                        </div>
+                    }
+
+                    @if (_notes.Count == 0)
+                    {
+                        <div class="yi-empty py-4">Henüz not eklenmemiş.</div>
+                    }
+                    else
+                    {
+                        <div class="yi-stack">
+                            @foreach (var note in _notes)
+                            {
+                                <div class="yi-note-item @(_selected?.Id == note.Id ? "yi-note-selected" : "")"
+                                     @onclick="() => SelectNote(note)">
+                                    <div class="d-flex align-items-start justify-content-between gap-1">
+                                        <div class="fw-semibold small text-truncate flex-grow-1">@note.Title</div>
+                                        <div class="d-flex gap-1 flex-shrink-0">
+                                            @if (note.ReminderAt.HasValue && !note.IsReminderDismissed)
+                                            {
+                                                <i class="bi bi-bell-fill text-warning small" title="@note.ReminderAt?.ToString("dd.MM.yyyy HH:mm")"></i>
+                                            }
+                                            @if (note.LinkedTaskId.HasValue)
+                                            {
+                                                <i class="bi bi-check2-square text-success small" title="Göreve dönüştürüldü"></i>
+                                            }
+                                        </div>
+                                    </div>
+                                    <div class="yi-muted small text-truncate">@TruncateContent(note.Content)</div>
+                                    <div class="d-flex justify-content-between align-items-center mt-1">
+                                        <div class="d-flex flex-wrap gap-1">
+                                            @foreach (var tag in GetTags(note.Tags))
+                                            {
+                                                <span class="yi-badge yi-badge-light" style="font-size:0.65rem;">@tag</span>
+                                            }
+                                        </div>
+                                        <div class="yi-muted" style="font-size:0.7rem;">@note.CreatedAt.ToString("dd.MM.yy")</div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        @* Sağ: Not Editörü veya AI Chat *@
+        <div class="col-12 col-lg-8">
+            @if (!_showChat)
+            {
+                @* ─── Not Editörü ─── *@
+                <div class="yi-card">
+                    <div class="yi-card-header d-flex justify-content-between align-items-center">
+                        <h2 class="yi-card-title">@(_editing.Id == 0 ? "Yeni Not" : "Notu Düzenle")</h2>
+                        @if (_editing.Id > 0)
+                        {
+                            <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="DeleteNoteAsync">
+                                <i class="bi bi-trash"></i> Sil
+                            </button>
+                        }
+                    </div>
+                    <div class="yi-card-body p-3 p-lg-4">
+                        <div class="row g-3">
+                            <div class="col-12">
+                                <label class="yi-label">Başlık</label>
+                                <input class="yi-input" @bind="_editing.Title" placeholder="Notun başlığı..." />
+                            </div>
+
+                            <div class="col-12">
+                                <label class="yi-label">İçerik</label>
+                                <textarea class="yi-input" rows="8" @bind="_editing.Content"
+                                          placeholder="Notun içeriği... Hatırlatmalar, fikirler, ilaç saatleri, randevular..."></textarea>
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="yi-label">Etiketler <span class="yi-muted">(virgülle ayır)</span></label>
+                                <input class="yi-input" @bind="_editing.Tags" placeholder="Örn: ilaç, randevu, fikir" />
+                            </div>
+
+                            <div class="col-12 col-md-6">
+                                <label class="yi-label">Hatırlatma Zamanı</label>
+                                <input type="datetime-local" class="yi-input"
+                                       value="@FormatForInput(_editing.ReminderAt)"
+                                       @onchange="OnReminderChanged" />
+                            </div>
+
+                            @if (_editing.Id > 0 && _editing.ReminderAt.HasValue)
+                            {
+                                <div class="col-12">
+                                    <div class="d-flex align-items-center gap-2">
+                                        <input type="checkbox" id="chk-dismiss" class="yi-check" @bind="_editing.IsReminderDismissed" />
+                                        <label for="chk-dismiss" class="yi-label-inline">Hatırlatmayı Kapat</label>
+                                    </div>
+                                </div>
+                            }
+
+                            @if (_editing.LinkedTaskId.HasValue)
+                            {
+                                <div class="col-12">
+                                    <div class="yi-alert yi-alert-secondary py-2">
+                                        <i class="bi bi-check2-square me-2 text-success"></i>
+                                        Bu not <a href="/gorev/@_editing.LinkedTaskId" class="yi-link">Görev #@_editing.LinkedTaskId</a> olarak dönüştürüldü.
+                                    </div>
+                                </div>
+                            }
+
+                            @* İşlem Butonları *@
+                            <div class="col-12 d-flex flex-wrap gap-2">
+                                <button type="button" class="yi-btn-primary" @onclick="SaveNoteAsync">
+                                    <i class="bi bi-save"></i> Kaydet
+                                </button>
+                                @if (!_editing.LinkedTaskId.HasValue && _editing.Id > 0)
+                                {
+                                    <button type="button" class="yi-btn-outline" @onclick="() => _showConvertPanel = !_showConvertPanel">
+                                        <i class="bi bi-check2-square"></i> Göreve Dönüştür
+                                    </button>
+                                }
+                                <button type="button" class="yi-btn-outline" @onclick="StartChatAsync">
+                                    <i class="bi bi-robot me-1"></i> AI Asistan
+                                </button>
+                            </div>
+
+                            @* Göreve Dönüştürme Paneli *@
+                            @if (_showConvertPanel)
+                            {
+                                <div class="col-12">
+                                    <div class="yi-card" style="border: 1px solid var(--yi-border);">
+                                        <div class="yi-card-header"><h3 class="yi-card-title">Göreve Dönüştür</h3></div>
+                                        <div class="yi-card-body p-3">
+                                            <div class="row g-2">
+                                                <div class="col-12">
+                                                    <label class="yi-label">Görev Başlığı</label>
+                                                    <input class="yi-input" @bind="_taskTitle" placeholder="Görev başlığı..." />
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <label class="yi-label">Son Tarih</label>
+                                                    <input type="date" class="yi-input"
+                                                           value="@(_taskDueDate?.ToString("yyyy-MM-dd"))"
+                                                           @onchange="e => _taskDueDate = DateTime.TryParse(e.Value?.ToString(), out var d) ? d : null" />
+                                                </div>
+                                                <div class="col-12 col-md-6">
+                                                    <label class="yi-label">Öncelik</label>
+                                                    <select class="yi-select" @bind="_taskPriorityId">
+                                                        @foreach (var p in _priorities)
+                                                        {
+                                                            <option value="@p.Id">@p.Value</option>
+                                                        }
+                                                    </select>
+                                                </div>
+                                                <div class="col-12">
+                                                    <button type="button" class="yi-btn-success" @onclick="ConvertToTaskAsync">
+                                                        <i class="bi bi-check-lg"></i> Görevi Oluştur
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+            else
+            {
+                @* ─── AI Chat Paneli ─── *@
+                <div class="yi-card d-flex flex-column" style="height: calc(100vh - 260px); min-height: 520px;">
+                    @* Chat Header *@
+                    <div class="yi-card-header d-flex justify-content-between align-items-center flex-shrink-0">
+                        <div class="d-flex align-items-center gap-2">
+                            <i class="bi bi-robot fs-5 text-primary"></i>
+                            <div>
+                                <h2 class="yi-card-title mb-0">AI Not Asistanı</h2>
+                                @if (!string.IsNullOrWhiteSpace(_editing.Title))
+                                {
+                                    <div class="yi-muted small">Not: @_editing.Title</div>
+                                }
+                            </div>
+                        </div>
+                        <div class="d-flex gap-2 align-items-center">
+                            @if (_parsedNote is not null)
+                            {
+                                <button type="button" class="yi-btn-success yi-btn-sm" @onclick="ApplyParsedNote">
+                                    <i class="bi bi-check-lg me-1"></i> Notu Uygula
+                                </button>
+                            }
+                            <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="() => _showChat = false">
+                                <i class="bi bi-pencil me-1"></i> Editöre Dön
+                            </button>
+                        </div>
+                    </div>
+
+                    @* Chat Mesajları *@
+                    <div class="flex-grow-1 overflow-auto p-3" id="chatContainer">
+                        <div class="d-flex flex-column gap-2">
+                            @foreach (var msg in _chatHistory)
+                            {
+                                @if (msg.Role == "user")
+                                {
+                                    <div class="d-flex justify-content-end">
+                                        <div class="chat-bubble chat-bubble-user">@msg.Text</div>
+                                    </div>
+                                }
+                                else
+                                {
+                                    <div class="d-flex justify-content-start gap-2">
+                                        <div class="chat-avatar">
+                                            <i class="bi bi-robot"></i>
+                                        </div>
+                                        <div class="chat-bubble chat-bubble-ai">
+                                            <pre class="mb-0" style="white-space: pre-wrap; font-family: inherit; font-size: 0.9rem;">@CleanChatText(msg.Text)</pre>
+                                            @if (HasParsedNote(msg.Text))
+                                            {
+                                                <div class="mt-2 pt-2 border-top d-flex gap-2">
+                                                    <button type="button" class="yi-btn-success yi-btn-sm"
+                                                            @onclick="() => ApplyMessageAsNote(msg.Text)">
+                                                        <i class="bi bi-check-lg me-1"></i> Bu Notu Uygula
+                                                    </button>
+                                                </div>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            }
+                            @if (_aiChatting)
+                            {
+                                <div class="d-flex justify-content-start gap-2">
+                                    <div class="chat-avatar">
+                                        <i class="bi bi-robot"></i>
+                                    </div>
+                                    <div class="chat-bubble chat-bubble-ai">
+                                        <span class="yi-nav-spinner me-2" role="status"></span>
+                                        <span class="yi-muted">Yazıyor...</span>
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    </div>
+
+                    @* Chat Input *@
+                    <div class="flex-shrink-0 p-2 border-top">
+                        <div class="d-flex gap-2 align-items-end">
+                            <textarea class="yi-input flex-grow-1"
+                                      rows="2"
+                                      style="resize: none;"
+                                      @bind="_chatInput"
+                                      @bind:event="oninput"
+                                      @onkeydown="OnChatKeyDown"
+                                      placeholder="Mesajınızı yazın... (Enter = gönder, Shift+Enter = yeni satır)"
+                                      disabled="@_aiChatting"></textarea>
+                            <button type="button" class="yi-btn-primary"
+                                    style="height: 58px; width: 48px;"
+                                    @onclick="SendChatMessageAsync"
+                                    disabled="@(_aiChatting || string.IsNullOrWhiteSpace(_chatInput))">
+                                <i class="bi bi-send-fill"></i>
+                            </button>
+                        </div>
+                        <div class="yi-muted" style="font-size: 0.72rem; margin-top: 4px;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Not hazır olduğunda AI, "Notu Uygula" butonunu aktif eder — ardından editörde düzenleyip kaydedebilirsiniz.
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="note" Parameters="@_aiParams" />
+
+<style>
+    .yi-note-item {
+        padding: 0.6rem 0.75rem;
+        border-bottom: 1px solid var(--yi-border);
+        cursor: pointer;
+        transition: background 0.15s;
+    }
+    .yi-note-item:hover { background: var(--yi-bg-subtle); }
+    .yi-note-selected { background: var(--yi-primary-subtle) !important; border-left: 3px solid var(--yi-primary); }
+
+    /* Chat bubbles */
+    .chat-bubble {
+        max-width: 78%;
+        padding: 0.55rem 0.85rem;
+        border-radius: 14px;
+        font-size: 0.9rem;
+        line-height: 1.55;
+        word-break: break-word;
+    }
+    .chat-bubble-user {
+        background: var(--yi-primary);
+        color: #fff;
+        border-bottom-right-radius: 4px;
+    }
+    .chat-bubble-ai {
+        background: var(--yi-bg-subtle);
+        color: var(--yi-body-color);
+        border: 1px solid var(--yi-border);
+        border-bottom-left-radius: 4px;
+    }
+    .chat-avatar {
+        width: 30px;
+        height: 30px;
+        min-width: 30px;
+        border-radius: 50%;
+        background: var(--yi-primary-subtle);
+        color: var(--yi-primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.85rem;
+        margin-top: 2px;
+    }
+</style>
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["noteId"] = _selected?.Id ?? 0
+    };
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    // ─── Not Yönetimi ──────────────────────────────────────────────────────────
+    private bool _loading = true;
+    private bool _showConvertPanel;
+    private string? _tagFilter;
+
+    private List<PersonalNote> _notes = [];
+    private List<PersonalNote> _dueReminders = [];
+    private List<string> _allTags = [];
+    private List<Lookup> _priorities = [];
+
+    private PersonalNote _editing = new();
+    private PersonalNote? _selected;
+
+    // Göreve dönüştürme
+    private string _taskTitle = string.Empty;
+    private DateTime? _taskDueDate;
+    private int _taskPriorityId;
+
+    // ─── AI Chat ───────────────────────────────────────────────────────────────
+    private bool _showChat;
+    private bool _aiChatting;
+    private string _chatInput = string.Empty;
+    private List<ChatMsg> _chatHistory = [];
+    private ParsedNote? _parsedNote;
+
+    private record ChatMsg(string Role, string Text);
+    private record ParsedNote(string Title, string Content, string Tags);
+
+    // ──────────────────────────────────────────────────────────────────────────
+    private int UserId => SessionSvc.ActiveUser.UserId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _priorities = await LookupSvc.ListByGroupAsync("TaskPriority");
+        if (_priorities.Count > 0) _taskPriorityId = _priorities[0].Id;
+
+        await LoadNotesAsync();
+
+        var reminderRes = await NoteSvc.GetDueRemindersAsync(UserId);
+        _dueReminders = reminderRes.Data ?? [];
+
+        _loading = false;
+    }
+
+    // ─── Not Listesi ───────────────────────────────────────────────────────────
+    private async Task LoadNotesAsync()
+    {
+        var res = await NoteSvc.ListAsync(UserId, _tagFilter);
+        _notes = res.Data ?? [];
+        _allTags = _notes
+            .SelectMany(n => GetTags(n.Tags))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(t => t)
+            .ToList();
+    }
+
+    private void NewNote()
+    {
+        _editing = new PersonalNote { UserId = UserId, CreatedAt = DateTime.UtcNow };
+        _selected = null;
+        _showConvertPanel = false;
+        _showChat = false;
+        _chatHistory = [];
+        _parsedNote = null;
+    }
+
+    private void SelectNote(PersonalNote note)
+    {
+        _selected = note;
+        _editing = new PersonalNote
+        {
+            Id = note.Id, UserId = note.UserId, Title = note.Title,
+            Content = note.Content, Tags = note.Tags,
+            ReminderAt = note.ReminderAt, IsReminderDismissed = note.IsReminderDismissed,
+            LinkedTaskId = note.LinkedTaskId, CreatedAt = note.CreatedAt
+        };
+        _taskTitle = note.Title;
+        _showConvertPanel = false;
+        _showChat = false;
+        _chatHistory = [];
+        _parsedNote = null;
+    }
+
+    // ─── Not CRUD ──────────────────────────────────────────────────────────────
+    private async Task SaveNoteAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editing.Title))
+        {
+            Toast.ShowWarning("Başlık zorunludur.");
+            return;
+        }
+        _editing.UserId = UserId;
+        var res = await NoteSvc.SaveAsync(_editing);
+        if (res.IsSuccess)
+        {
+            _editing.Id = res.Data;
+            Toast.ShowSuccess("Not kaydedildi.");
+            await LoadNotesAsync();
+        }
+        else Toast.ShowError(res.Message);
+    }
+
+    private async Task DeleteNoteAsync()
+    {
+        if (_editing.Id == 0) return;
+        var res = await NoteSvc.DeleteAsync(_editing.Id, UserId);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Not silindi.");
+            _editing = new PersonalNote();
+            _selected = null;
+            await LoadNotesAsync();
+        }
+        else Toast.ShowError(res.Message);
+    }
+
+    private async Task DismissReminderAsync(PersonalNote note)
+    {
+        await NoteSvc.DismissReminderAsync(note.Id, UserId);
+        _dueReminders.Remove(note);
+    }
+
+    private async Task ConvertToTaskAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_taskTitle))
+        {
+            Toast.ShowWarning("Görev başlığı zorunludur.");
+            return;
+        }
+        var task = new TaskItem
+        {
+            Title = _taskTitle,
+            Description = _editing.Content,
+            AssigneeId = UserId,
+            AssigneeName = SessionSvc.ActiveUser.FullName,
+            DueDate = _taskDueDate,
+            PriorityLookupId = _taskPriorityId,
+            StatusLookupId = (await LookupSvc.GetLookupIdAsync("TaskStatus", "Bekliyor")).Data ?? 0,
+            SourceEntityType = "PersonalNote",
+            SourceEntityId = _editing.Id
+        };
+        var res = await NoteSvc.ConvertToTaskAsync(_editing.Id, UserId, task);
+        if (res.IsSuccess)
+        {
+            _editing.LinkedTaskId = res.Data;
+            _showConvertPanel = false;
+            Toast.ShowSuccess($"Görev #{res.Data} oluşturuldu.");
+            await LoadNotesAsync();
+        }
+        else Toast.ShowError(res.Message);
+    }
+
+    // ─── AI Chat ───────────────────────────────────────────────────────────────
+    private Task StartChatAsync()
+    {
+        _showChat = true;
+        _chatHistory = [];
+        _parsedNote = null;
+
+        var greeting = (string.IsNullOrWhiteSpace(_editing.Content))
+            ? "Merhaba! 👋 Hangi konuda not almak istiyorsunuz? Aklınızdakileri özgürce anlatın — ben de güzel bir nota dönüştüreyim."
+            : $"Notunuzu gördüm: **{_editing.Title}**. Bu notu nasıl geliştirebilirim? Daha fazla detay eklememi, yapılandırmamı ya da farklı bir şey yapmamı ister misiniz?";
+
+        _chatHistory.Add(new ChatMsg("model", greeting));
+        return Task.CompletedTask;
+    }
+
+    private async Task SendChatMessageAsync()
+    {
+        var userText = _chatInput.Trim();
+        if (string.IsNullOrWhiteSpace(userText) || _aiChatting) return;
+
+        _chatInput = string.Empty;
+        _chatHistory.Add(new ChatMsg("user", userText));
+        _aiChatting = true;
+        StateHasChanged();
+
+        // İlk kullanıcı mesajına mevcut not bağlamını ekle
+        var isFirstUserMsg = _chatHistory.Count(m => m.Role == "user") == 1;
+        var messageToSend = userText;
+        if (isFirstUserMsg && !string.IsNullOrWhiteSpace(_editing.Content))
+        {
+            messageToSend = $"[Mevcut not bağlamı — Başlık: {_editing.Title} | İçerik: {_editing.Content} | Etiketler: {_editing.Tags}]\n\n{userText}";
+        }
+
+        // Konuşma geçmişini hazırla (son eklenen user mesajı hariç — onu messageToSend olarak göndereceğiz)
+        var history = _chatHistory
+            .Take(_chatHistory.Count - 1)
+            .Select(m => (m.Role, m.Text))
+            .ToList();
+
+        var res = await NoteChatSvc.ChatAsync(history, messageToSend);
+        var aiText = res.IsSuccess ? res.Data! : "⚠️ AI asistana şu an ulaşılamıyor. Lütfen tekrar deneyin.";
+
+        _chatHistory.Add(new ChatMsg("model", aiText));
+        _parsedNote = TryParseNote(aiText);
+        _aiChatting = false;
+
+        StateHasChanged();
+        await ScrollChatAsync();
+    }
+
+    private async Task OnChatKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+            await SendChatMessageAsync();
+    }
+
+    private void ApplyParsedNote()
+    {
+        if (_parsedNote is null) return;
+        if (!string.IsNullOrWhiteSpace(_parsedNote.Title))   _editing.Title   = _parsedNote.Title;
+        if (!string.IsNullOrWhiteSpace(_parsedNote.Content)) _editing.Content = _parsedNote.Content;
+        if (!string.IsNullOrWhiteSpace(_parsedNote.Tags))    _editing.Tags    = _parsedNote.Tags;
+        _showChat = false;
+        Toast.ShowInfo("Not alanları AI önerisiyle dolduruldu. Kontrol edip kaydedebilirsiniz.");
+    }
+
+    private void ApplyMessageAsNote(string text)
+    {
+        var parsed = TryParseNote(text);
+        if (parsed is null) return;
+        if (!string.IsNullOrWhiteSpace(parsed.Title))   _editing.Title   = parsed.Title;
+        if (!string.IsNullOrWhiteSpace(parsed.Content)) _editing.Content = parsed.Content;
+        if (!string.IsNullOrWhiteSpace(parsed.Tags))    _editing.Tags    = parsed.Tags;
+        _showChat = false;
+        Toast.ShowInfo("Not alanları AI önerisiyle dolduruldu. Kontrol edip kaydedebilirsiniz.");
+    }
+
+    private async Task ScrollChatAsync()
+    {
+        try { await JS.InvokeVoidAsync("scrollElementToBottom", "chatContainer"); }
+        catch { /* JS interop mevcut değilse sessizce geç */ }
+    }
+
+    // ─── Parse Yardımcıları ────────────────────────────────────────────────────
+    private static bool HasParsedNote(string text) =>
+        text.Contains("---NOT HAZIR---", StringComparison.Ordinal) &&
+        text.Contains("---SON---", StringComparison.Ordinal);
+
+    private static ParsedNote? TryParseNote(string text)
+    {
+        const string startMarker = "---NOT HAZIR---";
+        const string endMarker   = "---SON---";
+
+        var si = text.IndexOf(startMarker, StringComparison.Ordinal);
+        var ei = text.IndexOf(endMarker,   StringComparison.Ordinal);
+        if (si < 0 || ei <= si) return null;
+
+        var block = text[(si + startMarker.Length)..ei];
+        var title   = ExtractSingleLine(block, "Başlık:");
+        var content = ExtractMultiLine(block,  "İçerik:", "Etiketler:");
+        var tags    = ExtractSingleLine(block, "Etiketler:");
+
+        return (string.IsNullOrWhiteSpace(title) && string.IsNullOrWhiteSpace(content))
+            ? null
+            : new ParsedNote(title, content, tags);
+    }
+
+    private static string ExtractSingleLine(string block, string prefix)
+    {
+        var line = block.Split('\n')
+            .Select(l => l.Trim())
+            .FirstOrDefault(l => l.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
+        return line is null ? string.Empty : line[prefix.Length..].Trim();
+    }
+
+    private static string ExtractMultiLine(string block, string startPrefix, string endPrefix)
+    {
+        var lines = block.Split('\n').Select(l => l.Trim()).ToList();
+        var si = lines.FindIndex(l => l.StartsWith(startPrefix, StringComparison.OrdinalIgnoreCase));
+        if (si < 0) return string.Empty;
+
+        var sb = new System.Text.StringBuilder();
+        sb.AppendLine(lines[si][startPrefix.Length..].Trim());
+        for (int i = si + 1; i < lines.Count; i++)
+        {
+            if (lines[i].StartsWith(endPrefix, StringComparison.OrdinalIgnoreCase)) break;
+            sb.AppendLine(lines[i]);
+        }
+        return sb.ToString().Trim();
+    }
+
+    /// <summary>Chat görünümünde NOT HAZIR bloğunu gizler, sadece sohbet metnini gösterir.</summary>
+    private static string CleanChatText(string text)
+    {
+        const string startMarker = "---NOT HAZIR---";
+        var si = text.IndexOf(startMarker, StringComparison.Ordinal);
+        return si > 0 ? text[..si].TrimEnd() : text;
+    }
+
+    // ─── Diğer Yardımcılar ────────────────────────────────────────────────────
+    private async Task FilterByTag(string? tag)
+    {
+        _tagFilter = tag;
+        await LoadNotesAsync();
+    }
+
+    private void OnReminderChanged(ChangeEventArgs e)
+    {
+        _editing.ReminderAt = DateTime.TryParse(e.Value?.ToString(), out var dt) ? dt.ToUniversalTime() : null;
+    }
+
+    private static string FormatForInput(DateTime? dt) =>
+        dt.HasValue ? dt.Value.ToLocalTime().ToString("yyyy-MM-ddTHH:mm") : string.Empty;
+
+    private static string TruncateContent(string content) =>
+        content.Length > 80 ? content[..80] + "..." : content;
+
+    private static IEnumerable<string> GetTags(string tags) =>
+        tags.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(t => !string.IsNullOrWhiteSpace(t));
+}

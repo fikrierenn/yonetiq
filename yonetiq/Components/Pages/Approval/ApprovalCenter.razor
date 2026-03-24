@@ -1,0 +1,395 @@
+@page "/onaylar"
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Models
+@using YonetIQ.Components.Shared.AI
+@inject ApprovalService ApprovalSvc
+@inject UserService UserSvc
+@inject SessionService SessionSvc
+@inject IToastService Toast
+
+<PageTitle>Onay Merkezi</PageTitle>
+
+<PageHero Section="İş Akışı"
+          Icon="bi-check2-circle"
+          Title="Onay Merkezi"
+          Subtitle="Bekleyen onay taleplerini inceleyin ve işleme alın.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <button type="button" class="yi-btn-primary" @onclick="OpenCreateModal">
+            <i class="bi bi-plus-lg"></i> Yeni Talep
+        </button>
+    </Actions>
+</PageHero>
+
+@* Sekmeler *@
+<div class="d-flex gap-2 mb-3">
+    <button class="yi-btn-outline yi-btn-sm @(_tab == "my" ? "active" : "")" @onclick='() => SetTab("my")'>
+        <i class="bi bi-person-check me-1"></i>Benim Onaylarım
+        @if (_myPendingCount > 0)
+        {
+            <span class="yi-badge" style="background:var(--yi-primary);color:#fff;margin-left:.3rem">@_myPendingCount</span>
+        }
+    </button>
+    <button class="yi-btn-outline yi-btn-sm @(_tab == "all" ? "active" : "")" @onclick='() => SetTab("all")'>
+        <i class="bi bi-list-ul me-1"></i>Tüm Talepler
+    </button>
+</div>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_displayItems.Count == 0)
+{
+    <div class="yi-empty">Görüntülenecek onay talebi yok.</div>
+}
+else
+{
+    <div class="yi-card">
+        <div class="yi-card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Başlık</th>
+                        <th>Tür</th>
+                        <th>Talep Eden</th>
+                        <th>Tarih</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var req in _displayItems)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@req.Title</td>
+                            <td class="yi-muted small">@req.EntityType</td>
+                            <td class="small">@req.RequestedByName</td>
+                            <td class="small yi-muted">@req.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy")</td>
+                            <td>
+                                <span class="yi-badge @req.StatusClass">@req.StatusLabel</span>
+                            </td>
+                            <td class="text-end">
+                                <button class="yi-btn-outline yi-btn-sm" @onclick="() => OpenDetailModal(req.Id)">
+                                    <i class="bi bi-eye me-1"></i>İncele
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@* ─── Yeni Talep Modalı ─── *@
+@if (_showCreateModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="apCreateTitle">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="apCreateTitle"><i class="bi bi-plus-circle me-2"></i>Yeni Onay Talebi</h5>
+                    <button type="button" class="btn-close" @onclick="() => _showCreateModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="yi-label">Başlık</label>
+                            <input type="text" class="yi-input" @bind="_newReq.Title" placeholder="Onay talebinin başlığı" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Tür</label>
+                            <select class="yi-select" @bind="_newReq.EntityType">
+                                <option value="Custom">Genel</option>
+                                <option value="TaskItem">Görev</option>
+                                <option value="Decision">Karar</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Açıklama</label>
+                            <textarea class="yi-input" rows="3" @bind="_newReq.Description" placeholder="Onay için gerekli bağlam..."></textarea>
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Onaylayanlar (sırayla)</label>
+                            @foreach (var appr in _approvers)
+                            {
+                                <div class="d-flex gap-2 mb-2 align-items-center">
+                                    <select class="yi-select flex-fill" value="@appr.Id"
+                                            @onchange="e => UpdateApprover(appr, ParseInt(e.Value?.ToString()))">
+                                        <option value="0">Seçiniz...</option>
+                                        @foreach (var usr in _users)
+                                        {
+                                            <option value="@usr.Id">@usr.FullName</option>
+                                        }
+                                    </select>
+                                    <button type="button" class="yi-btn-outline yi-btn-sm"
+                                            style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                            @onclick="() => RemoveApprover(appr)">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </div>
+                            }
+                            <button type="button" class="yi-btn-outline yi-btn-sm mt-1" @onclick="AddApprover">
+                                <i class="bi bi-plus me-1"></i>Onaylayan Ekle
+                            </button>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_createError))
+                    {
+                        <div class="yi-alert yi-alert-danger mt-3">@_createError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showCreateModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="CreateRequestAsync" disabled="@_creating">
+                        @if (_creating)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <span>Gönder</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ─── Detay/İşlem Modalı ─── *@
+@if (_showDetailModal && _detailReq is not null)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="apDetailTitle">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="apDetailTitle">
+                        <i class="bi bi-check2-circle me-2"></i>@_detailReq.Title
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showDetailModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    @if (!string.IsNullOrEmpty(_detailReq.Description))
+                    {
+                        <p class="yi-muted small mb-3">@_detailReq.Description</p>
+                    }
+                    <div class="mb-3">
+                        <span class="yi-badge @_detailReq.StatusClass me-2">@_detailReq.StatusLabel</span>
+                        <span class="yi-muted small">Talep Eden: @_detailReq.RequestedByName</span>
+                    </div>
+
+                    <div class="mb-3">
+                        <div class="fw-semibold small mb-2">Onay Adımları</div>
+                        @foreach (var stp in _detailReq.Steps)
+                        {
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="yi-badge @(stp.Status == "Approved" ? "yi-badge-success" : stp.Status == "Rejected" ? "yi-badge-danger" : "yi-badge-light")">
+                                    @stp.StepOrder
+                                </span>
+                                <span class="fw-semibold small flex-fill">@stp.ApproverName</span>
+                                <span class="small yi-muted">@stp.StatusLabel</span>
+                                @if (!string.IsNullOrEmpty(stp.Comment))
+                                {
+                                    <span class="small yi-muted fst-italic">"@stp.Comment"</span>
+                                }
+                            </div>
+                        }
+                    </div>
+
+                    @if (_detailReq.Status == "Pending" && _detailReq.Steps.Any(s => s.ApproverId == (SessionSvc.ActiveUser?.UserId ?? 0) && s.Status == "Pending"))
+                    {
+                        <div class="border-top pt-3">
+                            <div class="fw-semibold small mb-2">İşleminiz</div>
+                            <textarea class="yi-input mb-2" rows="2" @bind="_actionComment" placeholder="Yorum (opsiyonel)"></textarea>
+                            <div class="d-flex gap-2">
+                                <button class="yi-btn-primary" @onclick='() => ProcessStepAsync("Approved")' disabled="@_processing">
+                                    <i class="bi bi-check-lg me-1"></i>Onayla
+                                </button>
+                                <button class="yi-btn-outline" style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                        @onclick='() => ProcessStepAsync("Rejected")' disabled="@_processing">
+                                    <i class="bi bi-x-lg me-1"></i>Reddet
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    @if (_detailReq.Status == "Pending" && _detailReq.RequestedBy == (SessionSvc.ActiveUser?.UserId ?? 0))
+                    {
+                        <button type="button" class="yi-btn-outline me-auto" style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                @onclick="CancelRequestAsync">
+                            <i class="bi bi-x-circle me-1"></i>Talebi İptal Et
+                        </button>
+                    }
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showDetailModal = false">Kapat</button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="approval" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private bool _loading = true;
+    private bool _showCreateModal;
+    private bool _showDetailModal;
+    private bool _creating;
+    private bool _processing;
+    private string? _createError;
+    private string _tab = "my";
+    private string? _actionComment;
+    private int _myPendingCount;
+
+    private List<ApprovalRequest> _myItems  = [];
+    private List<ApprovalRequest> _allItems = [];
+    private List<ApprovalRequest> _displayItems => _tab == "my" ? _myItems : _allItems;
+
+    private List<User> _users = [];
+    private ApprovalRequest _newReq = new();
+    private ApprovalRequest? _detailReq;
+
+    // Mutable class — Blazor foreach içinde property set için record kullanılmaz
+    private class ApproverEntry
+    {
+        public int    Id   { get; set; }
+        public string Name { get; set; } = string.Empty;
+    }
+
+    private List<ApproverEntry> _approvers = [];
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var userId = SessionSvc.ActiveUser?.UserId ?? 0;
+
+        var myRes  = await ApprovalSvc.GetPendingForUserAsync(userId);
+        _myItems   = myRes.IsSuccess ? (myRes.Data ?? []) : [];
+        _myPendingCount = _myItems.Count;
+
+        var allRes = await ApprovalSvc.ListAsync();
+        _allItems  = allRes.IsSuccess ? (allRes.Data ?? []) : [];
+
+        var uRes = await UserSvc.GetAllAsync();
+        _users = uRes.IsSuccess ? (uRes.Data ?? []) : [];
+
+        _loading = false;
+    }
+
+    private void SetTab(string tab) { _tab = tab; }
+
+    private void OpenCreateModal()
+    {
+        _newReq      = new ApprovalRequest { EntityType = "Custom" };
+        _approvers   = [];
+        _createError = null;
+        _showCreateModal = true;
+    }
+
+    private static int ParseInt(string? s) => int.TryParse(s, out var v) ? v : 0;
+
+    private void AddApprover()    => _approvers.Add(new ApproverEntry());
+    private void RemoveApprover(ApproverEntry a) => _approvers.Remove(a);
+
+    private void UpdateApprover(ApproverEntry a, int userId)
+    {
+        a.Id   = userId;
+        a.Name = _users.FirstOrDefault(u => u.Id == userId)?.FullName ?? "";
+    }
+
+    private async Task CreateRequestAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newReq.Title))
+        {
+            _createError = "Başlık zorunludur.";
+            return;
+        }
+        if (_approvers.Count == 0 || _approvers.Any(a => a.Id == 0))
+        {
+            _createError = "Geçerli onaylayan ekleyin.";
+            return;
+        }
+
+        _creating    = true;
+        _createError = null;
+
+        var user = SessionSvc.ActiveUser;
+        _newReq.RequestedBy     = user?.UserId ?? 1;
+        _newReq.RequestedByName = user?.FullName ?? "";
+
+        var res = await ApprovalSvc.CreateAsync(
+            _newReq,
+            _approvers.Select(a => a.Id).ToList(),
+            _approvers.Select(a => a.Name).ToList(),
+            user?.UserId ?? 1);
+
+        _creating = false;
+
+        if (res.IsSuccess)
+        {
+            _showCreateModal = false;
+            Toast.ShowSuccess("Onay talebi oluşturuldu.");
+            await LoadAsync();
+        }
+        else
+        {
+            _createError = res.Message ?? "Oluşturulamadı.";
+        }
+    }
+
+    private async Task OpenDetailModal(int id)
+    {
+        var res = await ApprovalSvc.GetWithStepsAsync(id);
+        if (res.IsSuccess && res.Data is not null)
+        {
+            _detailReq      = res.Data;
+            _actionComment  = null;
+            _showDetailModal = true;
+        }
+    }
+
+    private async Task ProcessStepAsync(string action)
+    {
+        if (_detailReq is null) return;
+        _processing = true;
+        var userId  = SessionSvc.ActiveUser?.UserId ?? 0;
+        var res     = await ApprovalSvc.ProcessStepAsync(_detailReq.Id, userId, action, _actionComment);
+        _processing = false;
+
+        if (res.IsSuccess)
+        {
+            _showDetailModal = false;
+            Toast.ShowSuccess(action == "Approved" ? "Onaylandı." : "Reddedildi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+
+    private async Task CancelRequestAsync()
+    {
+        if (_detailReq is null) return;
+        var res = await ApprovalSvc.CancelAsync(_detailReq.Id, SessionSvc.ActiveUser?.UserId ?? 0);
+        if (res.IsSuccess)
+        {
+            _showDetailModal = false;
+            Toast.ShowSuccess("Talep iptal edildi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+}

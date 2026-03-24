@@ -1,0 +1,356 @@
+@page "/gorevler"
+@using YonetIQ.Components.Shared.AI
+@inject TaskService TaskSvc
+@inject UserService UserSvc
+@inject IToastService Toast
+@inject SessionService SessionSvc
+
+<!-- 
+    Görev Listesi Sayfası (Task List).
+    Sistemdeki tüm görevleri listeler, kullanıcıya göre filtreleme, durum takibi ve silme işlemlerini yönetir.
+    Kolay takip için özet istatistik kartları içerir.
+-->
+
+<PageTitle>Görevler</PageTitle>
+
+<PageHero Section="Görev Modülü"
+          Icon="bi-check2-square"
+          Title="Görevler"
+          Subtitle="Filtrele, görev dağıt, durum değiştir ve takvim akışına bağla.">
+    <Actions>
+        <a class="yi-btn-primary" href="/gorev/yeni">Yeni Görev</a>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+    </Actions>
+</PageHero>
+
+<div class="row g-3 mb-3">
+    <!-- Özet İstatistik Kartları -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">TOPLAM GÖREV</div>
+                <div class="yi-mini-stat-value">@TotalTasks</div>
+                <div class="yi-mini-stat-sub">Filtre sonucundaki kayıtlar</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">BEKLİYOR</div>
+                <div class="yi-mini-stat-value">@PendingTasks</div>
+                <div class="yi-mini-stat-sub">Başlamayan görev adedi</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">DEVAM EDEN</div>
+                <div class="yi-mini-stat-value">@InProgressTasks</div>
+                <div class="yi-mini-stat-sub">Aktif çalışan görevler</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">TAMAMLANAN</div>
+                <div class="yi-mini-stat-value">@CompletedTasks</div>
+                <div class="yi-mini-stat-sub">Kapatılan görevler</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="yi-card">
+    <div class="yi-card-header">
+        <h2 class="yi-card-title">Filtreler</h2>
+    </div>
+    <div class="yi-card-body p-3 p-lg-4">
+        <div class="row g-2 align-items-end mb-3">
+            <div class="col-12 col-lg-3">
+                <label class="yi-label">Atanan Kullanıcı</label>
+                <!-- Sistem kullanıcılarına göre filtreleme -->
+                <select class="yi-select" value="@AssigneeIdFilter" @onchange="OnAssigneeFilterChangedAsync">
+                    <option value="">Tüm Kullanıcılar</option>
+                    @foreach (var user in _users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-lg-3">
+                <label class="yi-label">Serbest Atanan</label>
+                <!-- Manuel girilmiş isimlere göre filtreleme -->
+                <input class="yi-input" @bind="_freeTextAssigneeFilter" placeholder="İsim ile ara..." />
+            </div>
+            <div class="col-12 col-lg-2">
+                <label class="yi-label">Durum</label>
+                <!-- Görev durumuna göre filtreleme (Lookup tabanlı olması planlanıyor) -->
+                <select class="yi-select" @bind="_statusFilter">
+                    <option value="">Tüm Durumlar</option>
+                    @foreach (var status in _statusLookups)
+                    {
+                        <option value="@status.Id">@status.Value</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-lg-4 d-flex gap-2 flex-wrap">
+                <button type="button" class="yi-btn-primary" @onclick="ApplyFiltersAsync">Filtrele</button>
+                <button type="button" class="yi-btn-outline" @onclick="ClearFiltersAsync">Temizle</button>
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            // Veri yükleme animasyonu.
+            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+        }
+        else if (_tasks.Count == 0)
+        {
+            // Liste boşsa kullanıcıyı bilgilendir.
+            <div class="yi-alert yi-alert-light" role="alert">Kayıt bulunamadı.</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="yi-table">
+                    <thead>
+                        <tr>
+                            <th>Başlık</th>
+                            <th>Atanan</th>
+                            <th>Öncelik</th>
+                            <th>Durum</th>
+                            <th>Bitiş</th>
+                            <th class="text-right">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var task in _tasks)
+                        {
+                            <tr>
+                                <td class="fw-semibold text-primary">@task.Title</td>
+                                <td>@task.AssigneeName</td>
+                                <td>
+                                    <!-- Öncelik durumuna göre renkli rozet (badge) -->
+                                    <span class="yi-badge @GetPriorityBadgeClass(task.PriorityLookupId)">
+                                        @(task.PriorityLookupId == 1 ? "Yüksek" : "Normal")
+                                    </span>
+                                </td>
+                                <td>
+                                    <!-- Görev durumuna göre renkli rozet -->
+                                    <span class="yi-badge @GetStatusBadgeClass(task.StatusLookupId)">
+                                        @GetStatusText(task.StatusLookupId)
+                                    </span>
+                                </td>
+                                <td>@task.DueDate?.ToString("dd.MM.yyyy")</td>
+                                <td class="text-right">
+                                    <div class="d-inline-flex gap-2">
+                                        <a class="yi-btn-outline-primary yi-btn-sm" href="@($"/gorev/duzenle/{task.Id}")">Düzenle</a>
+                                        <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(task.Id)">Sil</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<AiSidebar @ref="_aiSidebar" Module="task" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams = new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    // Sayfa yükleme bayrağı.
+    private bool _loading = true;
+    
+    // Filtreleme için kullanılan değişkenler.
+    private int? _assigneeIdFilter;
+    private string _freeTextAssigneeFilter = string.Empty;
+    private int? _statusFilter;
+    
+    // Veri listeleri.
+    private List<User> _users = [];
+    private List<TaskItem> _tasks = [];
+    private List<Lookup> _statusLookups = [];
+
+    // Görünür kullanıcı ID seti (rol/departman bazlı)
+    private HashSet<int> _visibleUserIds = [];
+
+    private string _currentRole => SessionSvc.ActiveUser?.Role ?? string.Empty;
+    private bool IsAdmin         => _currentRole == "Genel Müdür";
+    private bool IsUnitManager   => _currentRole is "Müdür" or "Direktör";
+
+    // SelectBox için string dönüşümü.
+    private string? AssigneeIdFilter => _assigneeIdFilter?.ToString();
+
+    // Özet sayılar (hesaplanmış özellikler).
+    private int TotalTasks    => _tasks.Count;
+    private int PendingTasks  => _tasks.Count(x => x.StatusLookupId != 10);
+    private int InProgressTasks => _tasks.Count(x => x.StatusLookupId == 9);
+    private int CompletedTasks  => _tasks.Count(x => x.StatusLookupId == 10);
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        // Görünür kullanıcı setini belirle
+        await BuildVisibleUserIdsAsync();
+
+        var userRes = await UserSvc.GetAllAsync();
+        // Manager değilse sadece görünür kullanıcıları listele (assignee dropdown için)
+        _users = IsAdmin
+            ? (userRes.Data ?? [])
+            : (userRes.Data ?? []).Where(u => _visibleUserIds.Contains(u.Id)).ToList();
+
+        _statusLookups = await LookupSvc.ListByGroupAsync("TaskStatus");
+        await ApplyFiltersAsync();
+    }
+
+    private async Task BuildVisibleUserIdsAsync()
+    {
+        var uid = SessionSvc.ActiveUser?.UserId ?? 0;
+        if (IsAdmin)
+        {
+            // Genel Müdür: filtresiz, boş set = herkesi göster
+            _visibleUserIds = [];
+            return;
+        }
+        if (IsUnitManager)
+        {
+            var deptId = SessionSvc.ActiveUser?.DepartmentLookupId;
+            if (deptId.HasValue)
+            {
+                var deptUsers = await UserSvc.GetUsersByDepartmentAsync(deptId.Value);
+                _visibleUserIds = deptUsers.Select(u => u.Id).ToHashSet();
+            }
+            else
+            {
+                _visibleUserIds = [uid];
+            }
+        }
+        else
+        {
+            // Çalışan: sadece kendisi
+            _visibleUserIds = [uid];
+        }
+    }
+
+    @inject LookupService LookupSvc
+
+    /// <summary>
+    /// Atanan kullanıcı filtresi değiştiğinde tetiklenir.
+    /// </summary>
+    private async Task OnAssigneeFilterChangedAsync(ChangeEventArgs e)
+    {
+        _assigneeIdFilter = int.TryParse(e.Value?.ToString(), out var id) ? id : null;
+        await Task.CompletedTask;
+    }
+
+    private async Task ApplyFiltersAsync()
+    {
+        _loading = true;
+
+        ServiceResult<List<TaskItem>> result;
+
+        if (IsAdmin)
+        {
+            // Genel Müdür: UI filtresini olduğu gibi kullan
+            result = await TaskSvc.ListAsync(
+                assigneeName: string.IsNullOrWhiteSpace(_freeTextAssigneeFilter) ? null : _freeTextAssigneeFilter,
+                assigneeId: _assigneeIdFilter,
+                statusLookupId: _statusFilter);
+        }
+        else if (IsUnitManager)
+        {
+            // Birim amiri: departman çalışanlarının görevleri (UI assignee filtresi de uygulanır)
+            var effectiveId = _assigneeIdFilter.HasValue && _visibleUserIds.Contains(_assigneeIdFilter.Value)
+                ? _assigneeIdFilter
+                : (int?)null;
+            result = await TaskSvc.ListAsync(assigneeId: effectiveId, statusLookupId: _statusFilter);
+            if (result.IsSuccess && effectiveId == null)
+                result = ServiceResult<List<TaskItem>>.Success(
+                    (result.Data ?? []).Where(t => t.AssigneeId.HasValue && _visibleUserIds.Contains(t.AssigneeId.Value)).ToList());
+        }
+        else
+        {
+            // Çalışan: sadece kendi görevleri
+            result = await TaskSvc.ListAsync(
+                assigneeId: SessionSvc.ActiveUser?.UserId,
+                statusLookupId: _statusFilter);
+        }
+
+        if (result.IsSuccess)
+        {
+            _tasks = result.Data ?? [];
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+            _tasks = [];
+        }
+        _loading = false;
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var result = await TaskSvc.DeleteAsync(id);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Görev silindi.");
+            await ApplyFiltersAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// Tüm filtreleri temizler ve listeyi sıfırlar.
+    /// </summary>
+    private async Task ClearFiltersAsync()
+    {
+        _assigneeIdFilter = null;
+        _freeTextAssigneeFilter = string.Empty;
+        _statusFilter = null;
+        await ApplyFiltersAsync();
+    }
+
+    /// <summary>
+    /// Öncelik değerine göre uygun CSS sınıfını döndürür.
+    /// </summary>
+    private static string GetPriorityBadgeClass(int priorityId)
+    {
+        return priorityId switch
+        {
+            1 => "yi-badge-danger",
+            2 => "yi-badge-warning",
+            _ => "yi-badge-secondary"
+        };
+    }
+
+    /// <summary>
+    /// Durum değerine göre uygun CSS sınıfını döndürür.
+    /// </summary>
+    private static string GetStatusBadgeClass(int statusId)
+    {
+        return statusId switch
+        {
+            10 => "yi-badge-success", // Tamamlandı
+            9 => "yi-badge-primary", // Devam Ediyor
+            _ => "yi-badge-secondary"
+        };
+    }
+
+    private string GetStatusText(int statusId)
+    {
+        return _statusLookups.FirstOrDefault(x => x.Id == statusId)?.Value ?? "Aktif";
+    }
+}

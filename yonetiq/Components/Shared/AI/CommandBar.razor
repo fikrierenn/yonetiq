@@ -1,0 +1,137 @@
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Models.AI
+@inject AiOrchestrationService AiOrchestration
+@inject SessionService SessionSvc
+@inject IJSRuntime JS
+
+@if (_isOpen)
+{
+    <div class="yi-commandbar-overlay" @onclick="Close">
+        <div class="yi-commandbar-modal" @onclick:stopPropagation="true">
+            <div class="yi-commandbar-header">
+                <div class="yi-commandbar-input-wrap">
+                    <i class="bi bi-stars yi-ai-icon"></i>
+                    <input type="text" class="yi-commandbar-input" placeholder="AI'a sor... (or: bugunun onceliklerini goster)"
+                           @bind="_input" @bind:event="oninput" @onkeydown="HandleKeyDown" @ref="_inputRef" />
+                    @if (_processing)
+                    {
+                        <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+                    }
+                </div>
+            </div>
+
+            @if (_response is not null)
+            {
+                <div class="yi-commandbar-result">
+                    <SkillResultCard Response="@_response" UserId="@SessionSvc.ActiveUser.UserId" />
+                </div>
+            }
+            else if (!_processing && string.IsNullOrWhiteSpace(_input))
+            {
+                <div class="yi-commandbar-hints">
+                    <p class="text-muted small mb-2">Ornek komutlar:</p>
+                    <div class="d-flex flex-wrap gap-1">
+                        <button class="btn btn-sm yi-btn-ghost" @onclick='() => SetInput("Bugunun onceliklerini ozetle")'>
+                            <i class="bi bi-list-check"></i> Bugunun oncelikleri
+                        </button>
+                        <button class="btn btn-sm yi-btn-ghost" @onclick='() => SetInput("Geciken gorevleri listele")'>
+                            <i class="bi bi-exclamation-triangle"></i> Geciken gorevler
+                        </button>
+                        <button class="btn btn-sm yi-btn-ghost" @onclick='() => SetInput("Son degisiklikleri goster")'>
+                            <i class="bi bi-arrow-repeat"></i> Son degisiklikler
+                        </button>
+                    </div>
+                </div>
+            }
+
+            <div class="yi-commandbar-footer">
+                <span class="text-muted small"><kbd>Enter</kbd> gonder · <kbd>Esc</kbd> kapat</span>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _isOpen;
+    private string _input = string.Empty;
+    private bool _processing;
+    private AiResponse? _response;
+    private ElementReference _inputRef;
+
+    [Parameter] public string CurrentModule { get; set; } = "global";
+
+    public void Open()
+    {
+        _isOpen = true;
+        _input = string.Empty;
+        _response = null;
+        _processing = false;
+        StateHasChanged();
+    }
+
+    public void Close()
+    {
+        _isOpen = false;
+        StateHasChanged();
+    }
+
+    public void Toggle()
+    {
+        if (_isOpen) Close(); else Open();
+    }
+
+    private async Task SetInput(string text)
+    {
+        _input = text;
+        await ProcessRequest();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            Close();
+        }
+        else if (e.Key == "Enter" && !string.IsNullOrWhiteSpace(_input) && !_processing)
+        {
+            await ProcessRequest();
+        }
+    }
+
+    private async Task ProcessRequest()
+    {
+        if (string.IsNullOrWhiteSpace(_input) || !SessionSvc.IsLoggedIn) return;
+
+        _processing = true;
+        _response = null;
+        StateHasChanged();
+
+        try
+        {
+            var request = new AiRequest
+            {
+                UserInput = _input,
+                UserId = SessionSvc.ActiveUser.UserId,
+                Module = CurrentModule
+            };
+            _response = await AiOrchestration.ProcessRequestAsync(request);
+        }
+        catch (Exception)
+        {
+            _response = AiResponse.Failure("Istek islenirken hata olustu.");
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_isOpen)
+        {
+            try { await _inputRef.FocusAsync(); } catch { /* element not yet rendered */ }
+        }
+    }
+}

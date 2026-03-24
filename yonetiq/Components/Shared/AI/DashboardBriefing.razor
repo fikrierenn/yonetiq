@@ -1,0 +1,108 @@
+@using System.Web
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Models.AI
+@inject AiOrchestrationService AiOrchestration
+@inject SessionService SessionSvc
+
+<div class="yi-card yi-ai-briefing mb-4">
+    <div class="yi-card-header d-flex justify-content-between align-items-center">
+        <div class="d-flex align-items-center gap-2">
+            <i class="bi bi-sunrise yi-ai-icon"></i>
+            <span class="fw-semibold">AI Gunluk Briefing</span>
+        </div>
+        <div class="d-flex align-items-center gap-2">
+            @if (_response is not null)
+            {
+                <ConfidenceBadge Confidence="@_response.Confidence" />
+            }
+            <button class="btn btn-sm yi-btn-ghost" @onclick="LoadBriefing" disabled="@_loading" title="Yenile">
+                <i class="bi bi-arrow-clockwise @(_loading ? "yi-spin" : "")"></i>
+            </button>
+        </div>
+    </div>
+    <div class="yi-card-body">
+        @if (_loading)
+        {
+            <div class="d-flex align-items-center gap-2 text-muted">
+                <div class="spinner-border spinner-border-sm" role="status"></div>
+                <span>Briefing hazirlaniyor...</span>
+            </div>
+        }
+        else if (_response is not null && _response.IsSuccess)
+        {
+            <div class="yi-ai-content">
+                @((MarkupString)FormatContent(_response.Content))
+            </div>
+            @if (_response.InteractionId.HasValue)
+            {
+                <AiFeedbackWidget InteractionId="@_response.InteractionId.Value" UserId="@SessionSvc.ActiveUser.UserId" />
+            }
+        }
+        else if (_response is not null)
+        {
+            <div class="text-muted">
+                <i class="bi bi-info-circle"></i> @(_response.ErrorMessage ?? "Briefing yuklenemedi.")
+            </div>
+        }
+        else
+        {
+            <div class="text-muted">
+                <i class="bi bi-info-circle"></i> Briefing henuz yuklenmedi.
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private AiResponse? _response;
+    private bool _loading;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await LoadBriefing();
+            StateHasChanged();
+        }
+    }
+
+    private async Task LoadBriefing()
+    {
+        if (!SessionSvc.IsLoggedIn) return;
+        _loading = true;
+        StateHasChanged();
+
+        try
+        {
+            var request = new AiRequest
+            {
+                SkillId = "exec.daily_briefing",
+                UserId = SessionSvc.ActiveUser.UserId,
+                Module = "dashboard"
+            };
+            _response = await AiOrchestration.ProcessRequestAsync(request);
+        }
+        catch (Exception)
+        {
+            _response = AiResponse.Failure("Briefing yuklenirken hata olustu.");
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private static string FormatContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return string.Empty;
+
+        // HTML encode first to prevent XSS, then apply safe formatting
+        var safe = HttpUtility.HtmlEncode(content);
+        return safe
+            .Replace("\n\n", "</p><p>")
+            .Replace("\n", "<br/>")
+            .Insert(0, "<p>") + "</p>";
+    }
+}

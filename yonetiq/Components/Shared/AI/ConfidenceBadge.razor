@@ -1,0 +1,30 @@
+@* AI guven seviyesi badge'i *@
+
+<span class="badge yi-ai-confidence @CssClass" title="AI Guven Seviyesi: @Label">
+    <i class="bi @IconClass"></i> @Label
+</span>
+
+@code {
+    [Parameter] public float Confidence { get; set; }
+
+    private string Label => Confidence switch
+    {
+        > 0.8f => "Yuksek guven",
+        > 0.5f => "Orta guven",
+        _ => "Dusuk guven"
+    };
+
+    private string CssClass => Confidence switch
+    {
+        > 0.8f => "yi-confidence-high",
+        > 0.5f => "yi-confidence-medium",
+        _ => "yi-confidence-low"
+    };
+
+    private string IconClass => Confidence switch
+    {
+        > 0.8f => "bi-shield-check",
+        > 0.5f => "bi-shield-exclamation",
+        _ => "bi-shield"
+    };
+}

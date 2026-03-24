@@ -1,0 +1,452 @@
+@page "/profil"
+@inject SessionService SessionSvc
+@inject UserService UserSvc
+@inject AuthService AuthSvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+@inject TelegramService TelegramSvc
+@inject SettingsService SettingsSvc
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<!--
+    Kullanıcı Profil Sayfası.
+    Kullanıcının kendi ad/e-posta bilgilerini görüntülemesini ve şifresini değiştirmesini sağlar.
+-->
+
+<PageTitle>Profilim</PageTitle>
+
+<PageHero Section="Platform"
+          Icon="bi-person-circle"
+          Title="Profilim"
+          Subtitle="Hesap bilgilerinizi ve şifrenizi yönetin." />
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else if (_user is null)
+{
+    <div class="yi-alert yi-alert-warning">Kullanıcı bilgileri yüklenemedi.</div>
+}
+else
+{
+    <div class="row g-4">
+
+        @* Sol: Profil Özeti *@
+        <div class="col-12 col-lg-4">
+            <div class="yi-card text-center p-4">
+                <div class="mb-3">
+                    <div class="yi-avatar-xl mx-auto mb-3">
+                        <i class="bi bi-person-circle" style="font-size:4rem;color:var(--yi-primary);"></i>
+                    </div>
+                    <h5 class="fw-bold mb-0">@_user.FullName</h5>
+                    <p class="text-muted small mb-1">@_user.Email</p>
+                    <span class="badge bg-primary-subtle text-primary fw-semibold">@_roleName</span>
+                    @if (!string.IsNullOrWhiteSpace(_departmentName))
+                    {
+                        <br />
+                        <span class="badge bg-secondary-subtle text-secondary fw-semibold mt-1">@_departmentName</span>
+                    }
+                </div>
+                <hr />
+                <div class="small text-muted">
+                    <div class="d-flex justify-content-between mb-1">
+                        <span>Üyelik Tarihi</span>
+                        <span>@_user.CreatedAt.ToString("dd.MM.yyyy")</span>
+                    </div>
+                    <div class="d-flex justify-content-between">
+                        <span>Hesap Durumu</span>
+                        <span class="@(_user.IsActive ? "text-success" : "text-danger") fw-semibold">
+                            @(_user.IsActive ? "Aktif" : "Pasif")
+                        </span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Sağ: Bilgi ve Şifre Formları *@
+        <div class="col-12 col-lg-8">
+
+            @* Profil Bilgileri *@
+            <div class="yi-card mb-4">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title"><i class="bi bi-person me-2"></i>Bilgilerimi Güncelle</h2>
+                </div>
+                <div class="yi-card-body p-4">
+                    @if (!string.IsNullOrWhiteSpace(_profileError))
+                    {
+                        <div class="yi-alert yi-alert-warning mb-3">@_profileError</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="yi-label">Ad Soyad</label>
+                            <input class="yi-input" @bind="_editFullName" />
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">E-posta</label>
+                            <input class="yi-input" type="email" @bind="_editEmail" />
+                        </div>
+                        <div class="col-12 d-flex gap-2">
+                            <button type="button" class="yi-btn-primary" @onclick="SaveProfileAsync">
+                                <i class="bi bi-check-lg me-1"></i>Kaydet
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Şifre Değiştir *@
+            <div class="yi-card">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title"><i class="bi bi-shield-lock me-2"></i>Şifre Değiştir</h2>
+                </div>
+                <div class="yi-card-body p-4">
+                    @if (!string.IsNullOrWhiteSpace(_passwordError))
+                    {
+                        <div class="yi-alert yi-alert-warning mb-3">@_passwordError</div>
+                    }
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="yi-label">Mevcut Şifre</label>
+                            <div class="yi-input-password-wrap">
+                                <input type="@(_showCurrent ? "text" : "password")"
+                                       class="yi-input"
+                                       @bind="_currentPassword"
+                                       autocomplete="current-password" />
+                                <button type="button" class="yi-password-toggle" @onclick="() => _showCurrent = !_showCurrent">
+                                    <i class="bi bi-@(_showCurrent ? "eye-slash" : "eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">Yeni Şifre</label>
+                            <div class="yi-input-password-wrap">
+                                <input type="@(_showNew ? "text" : "password")"
+                                       class="yi-input"
+                                       @bind="_newPassword"
+                                       autocomplete="new-password" />
+                                <button type="button" class="yi-password-toggle" @onclick="() => _showNew = !_showNew">
+                                    <i class="bi bi-@(_showNew ? "eye-slash" : "eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">Yeni Şifre (Tekrar)</label>
+                            <div class="yi-input-password-wrap">
+                                <input type="@(_showConfirm ? "text" : "password")"
+                                       class="yi-input"
+                                       @bind="_confirmPassword"
+                                       autocomplete="new-password" />
+                                <button type="button" class="yi-password-toggle" @onclick="() => _showConfirm = !_showConfirm">
+                                    <i class="bi bi-@(_showConfirm ? "eye-slash" : "eye")"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        @* Şifre güç göstergesi *@
+                        @if (!string.IsNullOrEmpty(_newPassword))
+                        {
+                            var strength = GetPasswordStrength(_newPassword);
+                            <div class="col-12">
+                                <div class="d-flex align-items-center gap-2">
+                                    <div class="flex-grow-1" style="height:5px;border-radius:3px;background:#e2e8f0;overflow:hidden;">
+                                        <div style="height:100%;width:@(strength.Pct)%;background:@strength.Color;transition:width 0.3s;"></div>
+                                    </div>
+                                    <small class="text-muted fw-semibold" style="min-width:60px;">@strength.Label</small>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="col-12 d-flex gap-2">
+                            <button type="button" class="yi-btn-primary" @onclick="ChangePasswordAsync">
+                                <i class="bi bi-shield-check me-1"></i>Şifreyi Güncelle
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Telegram Bağlantısı *@
+            <div class="yi-card mt-4">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title"><i class="bi bi-telegram me-2"></i>Telegram Bağlantısı</h2>
+                </div>
+                <div class="yi-card-body p-4">
+                    @if (!string.IsNullOrWhiteSpace(_user.TelegramChatId))
+                    {
+                        @* Bağlı durum *@
+                        <div class="d-flex align-items-center gap-3 flex-wrap">
+                            <div class="yi-alert yi-alert-success py-2 mb-0 flex-grow-1">
+                                <i class="bi bi-check-circle me-2"></i>
+                                Telegram hesabınız bağlı. <strong>Chat ID:</strong> @_user.TelegramChatId
+                            </div>
+                            <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="UnlinkTelegramAsync">
+                                <i class="bi bi-x-circle me-1"></i>Bağlantıyı Kaldır
+                            </button>
+                        </div>
+                    }
+                    else if (string.IsNullOrWhiteSpace(_botUsername))
+                    {
+                        @* Bot yapılandırılmamış *@
+                        <div class="yi-alert yi-alert-warning py-2">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            Telegram bot henüz yapılandırılmamış. Sistem yöneticinizle iletişime geçin.
+                        </div>
+                    }
+                    else
+                    {
+                        @* Widget alanı *@
+                        <p class="small text-muted mb-3">
+                            Telegram hesabınızı bağlayarak rapor bildirimlerini doğrudan Telegram'dan alabilirsiniz.
+                        </p>
+                        <div id="tg-widget-container"></div>
+                        @if (_tgVerifyError is not null)
+                        {
+                            <div class="yi-alert yi-alert-danger py-2 mt-2 small">@_tgVerifyError</div>
+                        }
+                    }
+                </div>
+            </div>
+
+        </div>
+    </div>
+}
+
+@code {
+    private bool   _loading = true;
+    private User?  _user;
+    private string _roleName       = string.Empty;
+    private string _departmentName = string.Empty;
+
+    // Profil form
+    private string _editFullName = string.Empty;
+    private string _editEmail    = string.Empty;
+    private string? _profileError;
+
+    // Şifre form
+    private string _currentPassword = string.Empty;
+    private string _newPassword      = string.Empty;
+    private string _confirmPassword  = string.Empty;
+    private string? _passwordError;
+    private bool _showCurrent;
+    private bool _showNew;
+    private bool _showConfirm;
+
+    // Telegram widget
+    private string?  _botUsername;
+    private bool     _widgetInitialized = false;
+    private string?  _tgVerifyError;
+    private DotNetObjectReference<Profile>? _dotNetRef;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionSvc.IsLoggedIn)
+        {
+            Nav.NavigateTo("/giris");
+            return;
+        }
+
+        var res = await UserSvc.GetByIdAsync(SessionSvc.ActiveUser.UserId);
+        if (res.IsSuccess && res.Data is not null)
+        {
+            _user = res.Data;
+            _editFullName = _user.FullName;
+            _editEmail    = _user.Email ?? string.Empty;
+
+            var roles = await LookupSvc.ListByGroupAsync("UserRole");
+            _roleName = roles.FirstOrDefault(r => r.Id == _user.RoleLookupId)?.Value ?? "—";
+
+            if (_user.DepartmentLookupId.HasValue)
+            {
+                var depts = await LookupSvc.ListByGroupAsync("Department");
+                _departmentName = depts.FirstOrDefault(d => d.Id == _user.DepartmentLookupId)?.Value ?? string.Empty;
+            }
+        }
+
+        _botUsername = await SettingsSvc.GetAsync("Telegram.BotUsername");
+
+        _loading = false;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        // Widget'ı bir kere başlat: yüklenme bitti, bot adı var, kullanıcı bağlı değil
+        if (!_loading
+            && !_widgetInitialized
+            && _user is not null
+            && string.IsNullOrWhiteSpace(_user.TelegramChatId)
+            && !string.IsNullOrWhiteSpace(_botUsername))
+        {
+            _widgetInitialized = true;
+            _dotNetRef = DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("initTelegramWidget", "tg-widget-container", _botUsername, _dotNetRef);
+        }
+    }
+
+    /// <summary>
+    /// Telegram Login Widget'tan gelen callback — JS tarafından çağrılır.
+    /// </summary>
+    [JSInvokable]
+    public async Task OnTelegramCallback(string userJson)
+    {
+        _tgVerifyError = null;
+        try
+        {
+            // JSON'u dictionary'e çevir
+            var data = System.Text.Json.JsonSerializer.Deserialize<Dictionary<string, System.Text.Json.JsonElement>>(userJson);
+            if (data is null) { _tgVerifyError = "Telegram verisi okunamadı."; await InvokeAsync(StateHasChanged); return; }
+
+            // string dictionary'e dönüştür
+            var strData = data.ToDictionary(kv => kv.Key, kv => kv.Value.ToString());
+
+            // Sunucu tarafında imza doğrulama
+            var valid = await TelegramSvc.VerifyLoginWidgetAsync(strData);
+            if (!valid)
+            {
+                _tgVerifyError = "Telegram doğrulaması başarısız. Lütfen tekrar deneyin.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            // Chat ID'yi kaydet
+            if (!strData.TryGetValue("id", out var chatId) || string.IsNullOrWhiteSpace(chatId))
+            {
+                _tgVerifyError = "Telegram'dan geçerli bir kullanıcı ID'si alınamadı.";
+                await InvokeAsync(StateHasChanged);
+                return;
+            }
+
+            _user!.TelegramChatId = chatId;
+            var saveRes = await UserSvc.UpdateTelegramChatIdAsync(_user.Id, chatId);
+
+            if (saveRes.IsSuccess)
+            {
+                // SessionInfo'yu da güncelle
+                SessionSvc.ActiveUser.TelegramChatId = chatId;
+                Toast.ShowSuccess("Telegram hesabınız başarıyla bağlandı!");
+            }
+            else
+            {
+                _tgVerifyError = saveRes.Message ?? "Kayıt sırasında hata oluştu.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _tgVerifyError = $"Beklenmedik hata: {ex.Message}";
+        }
+
+        await InvokeAsync(StateHasChanged);
+    }
+
+    /// <summary>
+    /// Telegram bağlantısını kaldırır.
+    /// </summary>
+    private async Task UnlinkTelegramAsync()
+    {
+        if (_user is null) return;
+
+        var result = await UserSvc.UpdateTelegramChatIdAsync(_user.Id, null);
+
+        if (result.IsSuccess)
+        {
+            _user.TelegramChatId = null;
+            SessionSvc.ActiveUser.TelegramChatId = null;
+            _widgetInitialized = false; // Widget yeniden başlatılabilsin
+            Toast.ShowSuccess("Telegram bağlantısı kaldırıldı.");
+        }
+        else
+        {
+            Toast.ShowError(result.Message ?? "İşlem başarısız.");
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_dotNetRef is not null)
+        {
+            try { await JS.InvokeVoidAsync("disposeDotNetRef", _dotNetRef); } catch { /* sayfa zaten kapatıldı */ }
+            _dotNetRef.Dispose();
+        }
+    }
+
+    private async Task SaveProfileAsync()
+    {
+        _profileError = null;
+
+        if (string.IsNullOrWhiteSpace(_editFullName))
+        {
+            _profileError = "Ad Soyad boş bırakılamaz.";
+            return;
+        }
+
+        _user!.FullName = _editFullName.Trim();
+        _user.Email     = _editEmail.Trim();
+
+        var result = await UserSvc.SaveAsync(_user);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Profil bilgileri güncellendi.");
+        }
+        else
+        {
+            _profileError = result.Message;
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    private async Task ChangePasswordAsync()
+    {
+        _passwordError = null;
+
+        if (string.IsNullOrWhiteSpace(_currentPassword))
+        {
+            _passwordError = "Mevcut şifrenizi girin.";
+            return;
+        }
+
+        if (_newPassword.Length < 6)
+        {
+            _passwordError = "Yeni şifre en az 6 karakter olmalıdır.";
+            return;
+        }
+
+        if (_newPassword != _confirmPassword)
+        {
+            _passwordError = "Yeni şifreler eşleşmiyor.";
+            return;
+        }
+
+        var result = await AuthSvc.ChangePasswordAsync(SessionSvc.ActiveUser.UserId, _currentPassword, _newPassword);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Şifreniz başarıyla güncellendi.");
+            _currentPassword = _newPassword = _confirmPassword = string.Empty;
+        }
+        else
+        {
+            _passwordError = result.Message;
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    private static (int Pct, string Color, string Label) GetPasswordStrength(string pwd)
+    {
+        var score = 0;
+        if (pwd.Length >= 8) score++;
+        if (pwd.Length >= 12) score++;
+        if (pwd.Any(char.IsUpper)) score++;
+        if (pwd.Any(char.IsDigit)) score++;
+        if (pwd.Any(c => !char.IsLetterOrDigit(c))) score++;
+
+        return score switch
+        {
+            0 or 1 => (20,  "#d63939", "Çok Zayıf"),
+            2      => (40,  "#f59f00", "Zayıf"),
+            3      => (60,  "#f59f00", "Orta"),
+            4      => (80,  "#2fb344", "Güçlü"),
+            _      => (100, "#0ca678", "Çok Güçlü"),
+        };
+    }
+}

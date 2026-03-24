@@ -1,0 +1,282 @@
+@page "/kullanicilar"
+@inject UserService UserSvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+
+@* 
+    Kullanıcı Yönetim Sayfası.
+    Sistemdeki personellerin listelenmesi, yeni kullanıcı eklenmesi, 
+    bilgilerinin güncellenmesi ve pasife alınması işlemlerini yönetir.
+*@
+
+<PageTitle>Kullanıcılar</PageTitle>
+
+<PageHero Section="Kullanıcı Modülü"
+          Icon="bi-people"
+          Title="Kullanıcı Yönetimi"
+          Subtitle="Atama altyapısı için personel kayıtlarını yönetin ve rollerini düzenleyin.">
+    <Actions>
+        @* Yeni kullanıcı giriş formunu temizlemek için kullanılır *@
+        <button type="button" class="yi-btn-primary" @onclick="CreateNew"><i class="bi bi-person-plus"></i> Yeni Kullanıcı</button>
+    </Actions>
+</PageHero>
+
+<div class="row g-3">
+    @* Sol Kolon: Kullanıcı Ekleme/Düzenleme Formu *@
+    <div class="col-12 col-lg-5">
+        <div class="yi-card h-100">
+            <div class="yi-card-header">
+                <h2 class="yi-card-title">@(_model.Id == 0 ? "Yeni Kullanıcı" : "Kullanıcı Düzenle")</h2>
+            </div>
+            <div class="yi-card-body p-4">
+
+                <div class="mb-2">
+                    <label class="yi-label">Ad Soyad</label>
+                    <input class="yi-input" @bind="_model.FullName" placeholder="Örn: Ahmet Yılmaz" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="yi-label">Eposta</label>
+                    <input class="yi-input" @bind="_model.Email" placeholder="orn@sirket.com" />
+                </div>
+
+                <div class="mb-2">
+                    <label class="yi-label">Rol</label>
+                    <select class="yi-select" @bind="_model.RoleLookupId">
+                        <option value="0">Rol Seçiniz...</option>
+                        @foreach (var role in _roles)
+                        {
+                            <option value="@role.Id">@role.Value</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="mb-2">
+                    <label class="yi-label">Departman</label>
+                    <select class="yi-select" @bind="_model.DepartmentLookupId">
+                        <option value="">Departman Seçiniz...</option>
+                        @foreach (var dept in _departments)
+                        {
+                            <option value="@dept.Id">@dept.Value</option>
+                        }
+                    </select>
+                </div>
+
+                <div class="d-flex align-items-center gap-2 mb-2">
+                    <input id="aktif-checkbox" type="checkbox" class="yi-check" @bind="_model.IsActive" />
+                    <label for="aktif-checkbox" class="yi-label-inline">Sistem Erişimi Aktif</label>
+                </div>
+
+                <div class="d-flex gap-2 mt-3">
+                    <button type="button" class="yi-btn-primary" @onclick="SaveAsync">
+                        <i class="bi bi-save"></i> Kaydet
+                    </button>
+                    <button type="button" class="yi-btn-outline" @onclick="CreateNew">İptal / Temizle</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Sağ Kolon: Mevcut Kullanıcıların Listesi *@
+    <div class="col-12 col-lg-7">
+        <div class="yi-card h-100">
+            <div class="yi-card-header">
+                <h2 class="yi-card-title">Kullanıcı Listesi</h2>
+            </div>
+            <div class="yi-card-body p-4">
+                @if (_loading)
+                {
+                    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+                }
+                else if (_users.Count == 0)
+                {
+                    <div class="yi-alert yi-alert-light" role="alert">Kullanıcı bulunamadı.</div>
+                }
+                else
+                {
+                    <div class="overflow-x-auto">
+                        <table class="yi-table">
+                            <thead>
+                                <tr>
+                                    <th>Ad Soyad</th>
+                                    <th>Eposta</th>
+                                    <th>Rol</th>
+                                    <th>Departman</th>
+                                    <th>Durum</th>
+                                    <th class="text-right">İşlem</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var user in _users)
+                                {
+                                    <tr>
+                                        <td>@user.FullName</td>
+                                        <td>@user.Email</td>
+                                        <td>@GetRoleName(user.RoleLookupId)</td>
+                                        <td>@GetDepartmentName(user.DepartmentLookupId)</td>
+                                        <td>
+                                            @* Aktif/Pasif durumuna göre rozet rengini ayarla *@
+                                            <span class="yi-badge @(user.IsActive ? "yi-badge-success" : "yi-badge-secondary")">
+                                                @(user.IsActive ? "Aktif" : "Pasif")
+                                            </span>
+                                        </td>
+                                        <td class="text-right">
+                                            <div class="d-inline-flex gap-2">
+                                                <button type="button" class="yi-btn-outline-primary yi-btn-sm" @onclick="() => Edit(user)">
+                                                    <i class="bi bi-pencil"></i>
+                                                </button>
+                                                <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(user.Id)">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            </div>
+                                        </td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    // Veri yükleme durumu kontrolü
+    private bool _loading = true;
+    
+    // Listelenecek kullanıcılar
+    private List<User> _users = [];
+    private List<Lookup> _roles = [];
+    private List<Lookup> _departments = [];
+    
+    // Formda düzenlenen kullanıcı modeli
+    private User _model = new()
+    {
+        IsActive = true
+    };
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Sayfa açıldığında mevcut kullanıcıları yükle
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Veritabanındaki tüm kullanıcıları (aktif/pasif ayrımı olmadan) çeker.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        
+        // Rol ve Departman tanımlarını yükle (eğer boşsa)
+        if (_roles.Count == 0)
+        {
+            _roles = await LookupSvc.ListByGroupAsync("UserRole");
+        }
+        if (_departments.Count == 0)
+        {
+            _departments = await LookupSvc.ListByGroupAsync("Department");
+        }
+
+        // false parametresiyle pasif kullanıcıları da listeye dahil ediyoruz.
+        var result = await UserSvc.GetAllAsync(false);
+        if (result.IsSuccess)
+        {
+            _users = result.Data ?? [];
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Listeden seçilen bir kullanıcıyı düzenlenmek üzere forma aktarır.
+    /// </summary>
+    private void Edit(User user)
+    {
+        _model = new User
+        {
+            Id = user.Id,
+            FullName = user.FullName,
+            Email = user.Email,
+            RoleLookupId = user.RoleLookupId,
+            IsActive = user.IsActive,
+            CreatedAt = user.CreatedAt,
+            DepartmentLookupId = user.DepartmentLookupId
+        };
+    }
+
+    /// <summary>
+    /// Formdaki kullanıcı bilgilerini doğrular ve veritabanına kaydeder.
+    /// </summary>
+    private async Task SaveAsync()
+    {
+        // Validasyon: Ad Soyad zorunludur.
+        if (string.IsNullOrWhiteSpace(_model.FullName))
+        {
+            Toast.ShowWarning("Ad Soyad alanı boş bırakılamaz.");
+            return;
+        }
+
+        // Servis üzerinden kaydetme işlemini yap.
+        var result = await UserSvc.SaveAsync(_model);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Kullanıcı başarıyla kaydedildi.");
+            // Formu temizle ve listeyi yenile.
+            CreateNew();
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// Belirtilen kullanıcıyı sistemden siler ve listeyi yeniler.
+    /// </summary>
+    private async Task DeleteAsync(int id)
+    {
+        var result = await UserSvc.DeleteAsync(id);
+        if (result.IsSuccess)
+        {
+            Toast.ShowInfo("Kullanıcı kaydı silindi.");
+            // Eğer silinen kullanıcı şu an formda düzenleniyorsa formu temizle.
+            if (_model.Id == id)
+            {
+                CreateNew();
+            }
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// Formu yeni bir kullanıcı girişi için varsayılan değerlerle temizler.
+    /// </summary>
+    private void CreateNew()
+    {
+        _model = new User
+        {
+            IsActive = true,
+            RoleLookupId = _roles.FirstOrDefault()?.Id ?? 0
+        };
+    }
+
+    private string GetRoleName(int id) => _roles.FirstOrDefault(x => x.Id == id)?.Value ?? id.ToString() ?? "";
+    private string GetDepartmentName(int? id) => id.HasValue ? _departments.FirstOrDefault(x => x.Id == id.Value)?.Value ?? id.ToString() ?? "" : "-";
+}
+
+
+
+
+
+
+

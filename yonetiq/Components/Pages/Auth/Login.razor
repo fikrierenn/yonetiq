@@ -1,0 +1,208 @@
+@page "/giris"
+@layout LoginLayout
+@inject AuthService AuthService
+@inject SessionService SessionService
+@inject NavigationManager Nav
+
+<!--
+    Kullanıcı Giriş Sayfası (Login).
+    Sisteme erişim yetkisi almak için e-posta ve şifre doğrulaması yapar.
+    Başarılı girişte kullanıcıyı ana sayfaya yönlendirir.
+-->
+
+<div class="yi-login-header">
+    <div class="logo-mark">
+        <img src="/brand/yonetiq-mark.svg" alt="YonetIQ" />
+    </div>
+    <h1><span style="color:var(--yi-primary)">Yonet</span><span style="color:var(--yi-accent)">IQ</span></h1>
+    <p>Kurumsal Yönetim Portali</p>
+    <div class="yi-login-client-brand mt-2">
+        <img src="/brand/bkmkitap-logo.png" alt="bkmkitap" class="yi-login-client-logo" />
+    </div>
+</div>
+
+<EditForm Model="_model" OnValidSubmit="HandleLogin" FormName="login-form">
+    <DataAnnotationsValidator />
+
+    <div class="yi-form-group">
+        <label class="yi-label" for="email">E-posta</label>
+        <InputText id="email"
+                   class="yi-input"
+                   @bind-Value="_model.Email"
+                   placeholder="ornek@yonetiq.local"
+                   autocomplete="username"
+                   inputmode="email" />
+        <ValidationMessage For="() => _model.Email" class="yi-form-error" />
+    </div>
+
+    <div class="yi-form-group">
+        <label class="yi-label" for="password">Şifre</label>
+        <div class="yi-input-password-wrap">
+            <InputText id="password"
+                       type="@(_showPassword ? "text" : "password")"
+                       class="yi-input"
+                       @bind-Value="_model.Password"
+                       placeholder="••••••••"
+                       autocomplete="current-password" />
+            <button type="button"
+                    class="yi-password-toggle"
+                    @onclick="() => _showPassword = !_showPassword"
+                    title="@(_showPassword ? "Şifreyi gizle" : "Şifreyi göster")">
+                <i class="bi bi-@(_showPassword ? "eye-slash" : "eye")"></i>
+            </button>
+        </div>
+        <ValidationMessage For="() => _model.Password" class="yi-form-error" />
+    </div>
+
+    @if (!string.IsNullOrEmpty(_error))
+    {
+        <div class="yi-alert yi-alert-warning mb-3" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>@_error
+        </div>
+    }
+
+    <button type="submit" class="yi-btn-primary yi-login-submit" disabled="@_loading">
+        @if (_loading)
+        {
+            <span class="spinner-border spinner-border-sm me-2" role="status" aria-hidden="true"></span>
+            <span>Giriş yapılıyor…</span>
+        }
+        else
+        {
+            <i class="bi bi-box-arrow-in-right me-2"></i>
+            <span>Giriş Yap</span>
+        }
+    </button>
+    <div class="text-center mt-2">
+        <a href="/sifremi-unuttum" class="yi-link" style="font-size:0.85rem">Şifremi Unuttum</a>
+    </div>
+</EditForm>
+
+@* ── DEMO HIZLI GİRİŞ — sadece DEBUG modunda görünür ── *@
+#if DEBUG
+<div class="demo-bar">
+    <div class="demo-bar-label"><i class="bi bi-lightning-charge-fill me-1"></i>Demo Hesapları</div>
+    <div class="demo-bar-accounts">
+        @foreach (var acc in _demoAccounts)
+        {
+            <button type="button" class="demo-acc-btn" @onclick="() => QuickLogin(acc.Email)">
+                <span class="demo-acc-icon">@acc.Icon</span>
+                <span class="demo-acc-name">@acc.Name</span>
+                <span class="demo-acc-role">@acc.Role</span>
+            </button>
+        }
+    </div>
+</div>
+
+<style>
+    .demo-bar {
+        margin-top: 1.5rem;
+        padding: 0.75rem 1rem;
+        background: color-mix(in srgb, var(--yi-warning) 10%, transparent);
+        border: 1px dashed color-mix(in srgb, var(--yi-warning) 60%, transparent);
+        border-radius: 10px;
+        font-size: 0.8rem;
+    }
+    .demo-bar-label {
+        color: var(--yi-warning-text, #856404);
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+        letter-spacing: .04em;
+    }
+    .demo-bar-accounts {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+    }
+    .demo-acc-btn {
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+        padding: 0.3rem 0.65rem;
+        border: 1px solid var(--yi-border);
+        border-radius: 20px;
+        background: var(--yi-card-bg, #fff);
+        cursor: pointer;
+        transition: background .15s, border-color .15s;
+        font-size: 0.78rem;
+        line-height: 1.3;
+    }
+    .demo-acc-btn:hover { background: var(--yi-primary-subtle); border-color: var(--yi-primary); }
+    .demo-acc-icon { font-size: 1rem; }
+    .demo-acc-name { font-weight: 600; color: var(--yi-body-color); }
+    .demo-acc-role { color: var(--yi-muted-color, #6c757d); }
+</style>
+#endif
+
+@code {
+    private LoginModel _model = new();
+    private string?    _error;
+    private bool       _loading;
+    private bool       _showPassword;
+
+    protected override void OnInitialized()
+    {
+        // Eğer kullanıcı zaten giriş yapmışsa, doğrudan ana sayfaya yönlendirilir.
+        if (SessionService.IsLoggedIn)
+            Nav.NavigateTo("/");
+    }
+
+    /// <summary>
+    /// Giriş butonuna basıldığında tetiklenen ana metot.
+    /// </summary>
+    private async Task HandleLogin()
+    {
+        _error       = null;
+        _loading = true;
+
+        // AuthService üzerinden e-posta ve şifre doğrulaması yapılır.
+        var result = await AuthService.LoginAsync(_model.Email!, _model.Password!);
+
+        if (result.IsSuccess && result.Data is not null)
+        {
+            // Başarılı girişte SessionService güncellenir ve ana sayfaya gidilir.
+            SessionService.Login(result.Data);
+            Nav.NavigateTo("/");
+        }
+        else
+        {
+            // Giriş başarısızsa hata mesajı gösterilir.
+            _error = result.Message ?? "Giriş yapılamadı. Lütfen e-posta ve şifrenizi kontrol edin.";
+            _loading = false;
+        }
+    }
+
+    /// <summary>
+    /// Form verilerini tutmak için kullanılan yardımcı sınıf.
+    /// </summary>
+    private sealed class LoginModel
+    {
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "E-posta zorunludur.")]
+        public string? Email { get; set; }
+
+        [System.ComponentModel.DataAnnotations.Required(ErrorMessage = "Şifre zorunludur.")]
+        public string? Password  { get; set; }
+    }
+
+#if DEBUG
+    // ── DEMO (sadece DEBUG build'de derlenir) ──────────────────────────────────
+    private record DemoAccount(string Icon, string Name, string Role, string Email);
+
+    private readonly DemoAccount[] _demoAccounts =
+    [
+        new("👔", "Genel Müdür",       "Genel Müdür", "gm@YonetIQ.local"),
+        new("💰", "Finans Direktörü",  "Direktör",    "finans@YonetIQ.local"),
+        new("📈", "Satış Direktörü",   "Direktör",    "satis@YonetIQ.local"),
+        new("💻", "IT Müdürü",         "Müdür",       "it@YonetIQ.local"),
+        new("⚙️",  "Operasyon Müdürü", "Müdür",       "operasyon@YonetIQ.local"),
+    ];
+
+    private void QuickLogin(string email)
+    {
+        _model.Email    = email;
+        _model.Password = "Admin1234!";
+    }
+#endif
+}

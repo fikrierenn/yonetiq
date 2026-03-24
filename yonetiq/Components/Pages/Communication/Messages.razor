@@ -1,0 +1,591 @@
+@page "/mesajlar"
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.ViewModels
+@using YonetIQ.Data.Services
+@inject MessageService MessageSvc
+@inject SessionService SessionSvc
+@inject AttachmentService AttachmentSvc
+@inject UserService UserSvc
+@inject IToastService ToastSvc
+@inject NavigationManager Nav
+
+<div class="yi-page-header mb-4">
+    <div class="d-flex align-items-center justify-content-between">
+        <div>
+            <h1 class="yi-page-title">Mesajlar ve Bildirimler</h1>
+            <p class="yi-text-muted mb-0">İletişim merkezinizden tüm yazışmaları yönetin.</p>
+        </div>
+        <div class="yi-page-actions">
+            <button class="yi-btn yi-btn-primary" @onclick="PrepareNewMessage">
+                <i class="bi bi-plus-lg me-2"></i> Yeni Mesaj
+            </button>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4 col-xl-3">
+        <div class="yi-card h-100 mb-0">
+            <div class="yi-card-header d-flex justify-content-between align-items-center">
+                <span>Gelen Kutusu</span>
+                <span class="badge bg-primary rounded-pill">@_totalCount</span>
+            </div>
+            <div class="yi-card-body p-0">
+                <div class="list-group list-group-flush yi-message-list">
+                    @if (_threads == null)
+                    {
+                        <div class="p-4 text-center">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status"></div>
+                        </div>
+                    }
+                    else if (!_threads.Any())
+                    {
+                        <div class="p-4 text-center yi-text-muted">
+                            <i class="bi bi-chat-dots fs-3 d-block mb-2"></i>
+                            Mesaj bulunamadı.
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var thread in _threads)
+                        {
+                            <button class="list-group-item list-group-item-action p-3 border-0 @(thread.Key == _selectedThread?.Key ? "bg-light border-start border-4 border-primary" : "")"
+                                    @onclick="() => SelectThread(thread)">
+                                <div class="d-flex justify-content-between align-items-start mb-1">
+                                    <div class="d-flex align-items-center text-truncate" style="max-width: 150px;">
+                                        <i class="bi @thread.Icon me-2 fs-5"></i>
+                                        <span class="fw-bold">@thread.Title</span>
+                                    </div>
+                                    <small class="yi-text-muted text-nowrap">@thread.LastMessageAt.ToString("HH:mm")</small>
+                                </div>
+                                <div class="yi-text-muted text-truncate small">
+                                    @if (thread.UnreadCount > 0)
+                                    {
+                                        <span class="badge bg-danger rounded-pill me-1">@thread.UnreadCount</span>
+                                    }
+                                    @thread.Messages.LastOrDefault()?.Body
+                                </div>
+                            </button>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-8 col-xl-9">
+        <div class="yi-card h-100 mb-0 d-flex flex-column">
+            @if (_selectedThread != null)
+            {
+                <div class="yi-card-header bg-light d-flex justify-content-between align-items-center">
+                    <div class="d-flex align-items-center">
+                        <div class="yi-avatar-circle me-3">
+                            <i class="bi @_selectedThread.Icon fs-4"></i>
+                        </div>
+                        <div>
+                            <div class="fw-bold">@_selectedThread.Title</div>
+                            <div class="small yi-text-muted">@_selectedThread.Messages.Count mesaj</div>
+                        </div>
+                    </div>
+                </div>
+                <div class="yi-card-body yi-message-view p-4 d-flex flex-column gap-3" style="overflow-y: auto; max-height: 60vh;">
+                    @foreach (var msg in _selectedThread.Messages)
+                    {
+                        bool isMe = msg.SenderUserId == SessionSvc.ActiveUser.UserId;
+                        bool isSystem = msg.SenderUserId == null;
+                        
+                        <div class="d-flex w-100 @(isSystem ? "justify-content-center" : (isMe ? "justify-content-end" : "justify-content-start"))">
+                            <div class="yi-message-bubble @(isSystem ? "yi-bubble-system" : (isMe ? "yi-bubble-me" : "yi-bubble-other"))">
+                                @if (!isMe && !isSystem)
+                                {
+                                    <div class="small fw-bold mb-1" style="opacity: 0.8;">Kullanıcı @msg.SenderUserId</div>
+                                }
+                                <div class="message-text">@msg.Body</div>
+                                
+                                @if (msg.AttachmentId.HasValue && !string.IsNullOrWhiteSpace(msg.AttachmentType))
+                                {
+                                    <div class="mt-2 pt-2 border-top @(isMe ? "border-light border-opacity-25" : "")">
+                                        @if (msg.AttachmentType == "File" || msg.AttachmentType == "Attachment")
+                                        {
+                                            var att = GetCachedAttachment(msg.AttachmentId.Value);
+                                            if (att != null)
+                                            {
+                                                <a href="@att.StoragePath" target="_blank" class="text-decoration-none small fw-semibold @(isMe ? "text-white" : "text-primary") d-flex align-items-center">
+                                                    <i class="bi @GetFileIcon(att.ContentType) me-2 fs-5"></i>
+                                                    <div class="text-truncate" style="max-width: 200px;">@att.FileName</div>
+                                                </a>
+                                            }
+                                            else
+                                            {
+                                                <span class="small opacity-75">Dosya yükleniyor...</span>
+                                                @((MarkupString)TriggerAttachmentFetch(msg.AttachmentId.Value))
+                                            }
+                                        }
+                                        else
+                                        {
+                                            <a href="@GetAttachmentUrl(msg.AttachmentType, msg.AttachmentId.Value)" 
+                                               class="text-decoration-none small fw-semibold @(isMe ? "text-white" : "text-primary")">
+                                                <i class="bi bi-link-45deg me-1"></i> @msg.AttachmentType #@msg.AttachmentId Bağlantısı
+                                            </a>
+                                        }
+                                    </div>
+                                }
+                                
+                                <div class="text-end mt-1" style="font-size: 0.7rem; opacity: 0.7;">
+                                    @msg.CreatedAt.ToString("HH:mm")
+                                    @if (isMe)
+                                    {
+                                        <i class="bi @(msg.IsRead ? "bi-check-all text-info" : "bi-check") ms-1"></i>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+                    }
+                </div>
+                <div class="yi-card-footer border-top p-3 mt-auto">
+                    @if (_selectedThread.Key == "System")
+                    {
+                        <div class="text-center yi-text-muted small">Sistem bildirimlerine yanıt verilemez.</div>
+                    }
+                    else
+                    {
+                        <div class="d-flex flex-column gap-2">
+                            @if (_pendingFile != null)
+                            {
+                                <div class="yi-pending-attachment d-flex align-items-center p-2 rounded bg-light border">
+                                    <i class="bi bi-file-earmark-arrow-up me-2 text-primary"></i>
+                                    <span class="small text-truncate flex-grow-1">@_pendingFile.Name</span>
+                                    <button class="btn btn-sm text-danger p-0 ms-2" @onclick="ClearPendingFile"><i class="bi bi-x-circle"></i></button>
+                                </div>
+                            }
+                            <div class="input-group">
+                                <label for="msgFileUpload" class="yi-btn yi-btn-outline px-3 d-flex align-items-center cursor-pointer mb-0">
+                                    <i class="bi bi-paperclip"></i>
+                                </label>
+                                <InputFile OnChange="OnInputFileChange" class="d-none" id="msgFileUpload" />
+                                <textarea class="yi-input" placeholder="Cevap yazın..." rows="2" @bind="_replyBody" @bind:event="oninput" @onkeydown="HandleKeyDown"></textarea>
+                                <button class="yi-btn yi-btn-primary px-4" @onclick="SendReply" disabled="@(string.IsNullOrWhiteSpace(_replyBody) && _pendingFile == null)">
+                                    Gönder
+                                </button>
+                            </div>
+                        </div>
+                    }
+                </div>
+            }
+            else
+            {
+                <div class="yi-card-body d-flex flex-column align-items-center justify-content-center h-100 py-5 text-center">
+                    <div class="yi-empty-state-icon mb-3">
+                        <i class="bi bi-chat-square-text text-light-emphasis" style="font-size: 4rem;"></i>
+                    </div>
+                    <h3>Mesaj Seçilmedi</h3>
+                    <p class="yi-text-muted px-4" style="max-width: 400px;">
+                        Görüntülemek için sol taraftaki listeden bir mesaj seçin veya yeni bir görüşme başlatın.
+                    </p>
+                </div>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<ConversationThread>? _threads;
+    private ConversationThread? _selectedThread;
+    private int _totalCount;
+    private string _replyBody = "";
+    private IBrowserFile? _pendingFile;
+
+    private Dictionary<int, FileAttachment> _attachmentCache = new();
+    private HashSet<int> _fetchingAttachments = new();
+
+    // Yeni Mesaj modalı
+    private bool _showNewMsgModal;
+    private int? _newMsgRecipientId;
+    private string _newMsgBody = string.Empty;
+    private bool _newMsgSending;
+    private List<User> _allUsers = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadMessages();
+    }
+
+    private async Task LoadMessages()
+    {
+        if (SessionSvc.IsLoggedIn)
+        {
+            int myId = SessionSvc.ActiveUser.UserId;
+            var result = await MessageSvc.GetUserMessagesAsync(myId);
+            if (result.IsSuccess)
+            {
+                var messages = result.Data ?? [];
+                _threads = GroupMessagesIntoThreads(messages, myId);
+                _totalCount = _threads.Sum(t => t.UnreadCount);
+                
+                if (_selectedThread != null)
+                {
+                    _selectedThread = _threads.FirstOrDefault(t => t.Key == _selectedThread.Key);
+                }
+            }
+        }
+    }
+
+    private List<ConversationThread> GroupMessagesIntoThreads(List<CommunicationMessage> messages, int myUserId)
+    {
+        var dict = new Dictionary<string, ConversationThread>();
+
+        foreach (var msg in messages.OrderBy(m => m.CreatedAt))
+        {
+            string key;
+            string title;
+            string icon;
+            int? ctxDeptId = null;
+            int? ctxOtherUserId = null;
+
+            if (msg.AttachmentId.HasValue && !string.IsNullOrWhiteSpace(msg.AttachmentType))
+            {
+                key = $"Ctx_{msg.AttachmentType}_{msg.AttachmentId}";
+                title = $"{msg.AttachmentType} #{msg.AttachmentId} Konuşması";
+                icon = msg.AttachmentType == "Task" ? "bi-check2-square text-success" : 
+                       msg.AttachmentType == "Meeting" ? "bi-calendar-event text-info" : "bi-paperclip text-primary";
+            }
+            else if (msg.ReceiverDepartmentId.HasValue)
+            {
+                key = $"Dept_{msg.ReceiverDepartmentId}";
+                title = "Departman Kanalı";
+                icon = "bi-building text-warning";
+                ctxDeptId = msg.ReceiverDepartmentId;
+            }
+            else if (msg.SenderUserId == null)
+            {
+                key = "System";
+                title = "Sistem Bildirimleri";
+                icon = "bi-bell-fill text-secondary";
+            }
+            else
+            {
+                var otherUser = msg.SenderUserId == myUserId ? msg.ReceiverUserId : msg.SenderUserId;
+                key = $"User_{otherUser}";
+                title = $"Kullanıcı {otherUser}";
+                icon = "bi-person-fill text-primary";
+                ctxOtherUserId = otherUser;
+            }
+
+            if (!dict.TryGetValue(key, out var thread))
+            {
+                thread = new ConversationThread(myUserId)
+                {
+                    Key = key,
+                    Title = title,
+                    Icon = icon,
+                    ContextAttachmentType = msg.AttachmentId.HasValue ? msg.AttachmentType : null,
+                    ContextAttachmentId = msg.AttachmentId.HasValue ? msg.AttachmentId : null,
+                    ContextDepartmentId = ctxDeptId,
+                    ContextOtherUserId = ctxOtherUserId
+                };
+                dict[key] = thread;
+            }
+            
+            thread.Messages.Add(msg);
+        }
+
+        return dict.Values.OrderByDescending(t => t.LastMessageAt).ToList();
+    }
+
+    private async Task SelectThread(ConversationThread thread)
+    {
+        _selectedThread = thread;
+        
+        var unreads = thread.Messages.Where(m => !m.IsRead && m.SenderUserId != SessionSvc.ActiveUser.UserId).ToList();
+        foreach (var msg in unreads)
+        {
+            await MessageSvc.MarkAsReadAsync(msg.Id);
+            msg.IsRead = true;
+        }
+        
+        if (_threads != null)
+        {
+            _totalCount = _threads.Sum(t => t.UnreadCount);
+        }
+    }
+
+    private async Task PrepareNewMessage()
+    {
+        _newMsgBody = string.Empty;
+        _newMsgRecipientId = null;
+        _newMsgSending = false;
+
+        if (_allUsers.Count == 0)
+        {
+            var usersRes = await UserSvc.GetAllAsync(onlyActive: true);
+            if (usersRes.IsSuccess && usersRes.Data != null)
+            {
+                // Kendimizi listeden çıkar
+                _allUsers = usersRes.Data
+                    .Where(u => u.Id != SessionSvc.ActiveUser?.UserId)
+                    .ToList();
+            }
+        }
+
+        _showNewMsgModal = true;
+    }
+
+    private async Task SendNewMessageAsync()
+    {
+        if (_newMsgRecipientId is null || string.IsNullOrWhiteSpace(_newMsgBody))
+        {
+            ToastSvc.ShowWarning("Alıcı ve mesaj içeriği zorunludur.");
+            return;
+        }
+
+        _newMsgSending = true;
+
+        var msg = new CommunicationMessage
+        {
+            SenderUserId   = SessionSvc.ActiveUser?.UserId ?? 0,
+            ReceiverUserId = _newMsgRecipientId,
+            Body           = _newMsgBody.Trim(),
+            Type           = MessageType.UserMessage,
+            CreatedAt      = DateTime.UtcNow
+        };
+
+        var result = await MessageSvc.SendMessageAsync(msg);
+
+        _newMsgSending = false;
+
+        if (result.IsSuccess)
+        {
+            _showNewMsgModal = false;
+            ToastSvc.ShowSuccess("Mesaj gönderildi.");
+            await LoadMessages();
+        }
+        else
+        {
+            ToastSvc.ShowError("Mesaj gönderilemedi: " + result.Message);
+        }
+    }
+
+    private async Task SendReply()
+    {
+        if ((string.IsNullOrWhiteSpace(_replyBody) && _pendingFile == null) || _selectedThread == null) return;
+
+        int? uploadedId = null;
+        string? attachmentType = _selectedThread.ContextAttachmentType;
+        int? attachmentId = _selectedThread.ContextAttachmentId;
+
+        if (_pendingFile != null)
+        {
+            var uploadRes = await AttachmentSvc.UploadAttachmentAsync(_pendingFile, "Message", 0, SessionSvc.ActiveUser.UserId);
+            if (uploadRes.IsSuccess)
+            {
+                uploadedId = uploadRes.Data;
+                attachmentType = "File";
+                attachmentId = uploadedId;
+            }
+            else
+            {
+                ToastSvc.ShowError("Dosya yüklenemedi: " + uploadRes.Message);
+                return;
+            }
+        }
+
+        var newMsg = new CommunicationMessage
+        {
+            SenderUserId = SessionSvc.ActiveUser.UserId,
+            ReceiverUserId = _selectedThread.ContextOtherUserId,
+            ReceiverDepartmentId = _selectedThread.ContextDepartmentId,
+            Body = string.IsNullOrWhiteSpace(_replyBody) ? (_pendingFile?.Name ?? "Dosya eklendi") : _replyBody,
+            Type = MessageType.UserMessage,
+            AttachmentType = attachmentType,
+            AttachmentId = attachmentId,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        var result = await MessageSvc.SendMessageAsync(newMsg);
+        if (result.IsSuccess)
+        {
+            _replyBody = "";
+            _pendingFile = null;
+            await LoadMessages();
+        }
+    }
+
+    private void OnInputFileChange(InputFileChangeEventArgs e)
+    {
+        _pendingFile = e.File;
+    }
+
+    private void ClearPendingFile() => _pendingFile = null;
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Enter" && !e.ShiftKey)
+        {
+            await SendReply();
+        }
+    }
+
+    private FileAttachment? GetCachedAttachment(int id)
+    {
+        _attachmentCache.TryGetValue(id, out var att);
+        return att;
+    }
+
+    private string TriggerAttachmentFetch(int id)
+    {
+        if (!_fetchingAttachments.Contains(id))
+        {
+            _fetchingAttachments.Add(id);
+            _ = FetchAttachmentAsync(id);
+        }
+        return "";
+    }
+
+    private async Task FetchAttachmentAsync(int id)
+    {
+        var res = await AttachmentSvc.GetAttachmentByIdAsync(id);
+        if (res.IsSuccess && res.Data != null)
+        {
+            _attachmentCache[id] = res.Data;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private string GetFileIcon(string? contentType) => contentType switch
+    {
+        var ct when ct?.Contains("image") == true => "bi-file-earmark-image",
+        var ct when ct?.Contains("pdf") == true => "bi-file-earmark-pdf",
+        var ct when ct?.Contains("word") == true => "bi-file-earmark-word",
+        var ct when ct?.Contains("excel") == true => "bi-file-earmark-spreadsheet",
+        _ => "bi-file-earmark-text"
+    };
+
+    private string GetAttachmentUrl(string? type, int id)
+    {
+        return type switch
+        {
+            "Task" => $"/gorev/{id}",
+            "Meeting" => $"/toplanti/{id}",
+            "Report" => $"/rapor/{id}",
+            "Query" => $"/sorgu/{id}",
+            _ => "/"
+        };
+    }
+}
+
+@* ── Yeni Mesaj Modalı ─────────────────────────────────────── *@
+@if (_showNewMsgModal)
+{
+    <div class="modal fade show d-block" tabindex="-1" style="background:rgba(0,0,0,.45);" @onclick:stopPropagation>
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content yi-card border-0">
+                <div class="modal-header yi-card-header">
+                    <h5 class="modal-title">
+                        <i class="bi bi-pencil-square me-2"></i>Yeni Mesaj
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showNewMsgModal = false"></button>
+                </div>
+                <div class="modal-body p-3">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Alıcı</label>
+                        <select class="yi-input" @bind="_newMsgRecipientId">
+                            <option value="">— Kullanıcı seçin —</option>
+                            @foreach (var u in _allUsers)
+                            {
+                                <option value="@u.Id">@u.FullName (@u.Email)</option>
+                            }
+                        </select>
+                    </div>
+                    <div class="mb-1">
+                        <label class="form-label fw-semibold">Mesaj</label>
+                        <textarea class="yi-input" rows="4" placeholder="Mesajınızı yazın..."
+                                  @bind="_newMsgBody" @bind:event="oninput"></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer yi-card-header gap-2">
+                    <button class="yi-btn yi-btn-outline" @onclick="() => _showNewMsgModal = false">İptal</button>
+                    <button class="yi-btn yi-btn-primary" @onclick="SendNewMessageAsync"
+                            disabled="@(_newMsgSending || _newMsgRecipientId is null || string.IsNullOrWhiteSpace(_newMsgBody))">
+                        @if (_newMsgSending)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1"></span>
+                        }
+                        <i class="bi bi-send me-1"></i> Gönder
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .yi-message-list {
+        max-height: 600px;
+        overflow-y: auto;
+    }
+    
+    .yi-message-view {
+        min-height: 400px;
+        background-color: var(--yi-body-bg);
+    }
+
+    .yi-message-bubble {
+        padding: 0.75rem 1rem;
+        border-radius: 1rem;
+        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        max-width: 80%;
+        line-height: 1.4;
+    }
+
+    .yi-bubble-me {
+        background: var(--yi-primary);
+        color: white;
+        border-bottom-right-radius: 0.2rem;
+    }
+
+    .yi-bubble-other {
+        background: white;
+        color: var(--yi-body-color);
+        border-bottom-left-radius: 0.2rem;
+    }
+
+    .yi-bubble-system {
+        background: var(--yi-light);
+        color: var(--yi-text-muted);
+        font-size: 0.9em;
+        padding: 0.5rem 1rem;
+        text-align: center;
+        border-radius: 1rem;
+        box-shadow: none;
+    }
+
+    .yi-avatar-circle {
+        width: 48px;
+        height: 48px;
+        background: white;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    .yi-unread-indicator {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background-color: var(--yi-danger);
+    }
+
+    .yi-pending-attachment {
+        font-size: 0.85rem;
+        animation: slideIn 0.3s ease;
+    }
+
+    @@keyframes slideIn {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+
+    .cursor-pointer { cursor: pointer; }
+</style>

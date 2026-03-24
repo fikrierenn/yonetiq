@@ -1,0 +1,290 @@
+@inject QuerySetService SetSvc
+@inject NavigationManager Nav
+@inject SessionService SessionSvc
+@inject AuditService AuditService
+@implements IDisposable
+
+@*
+    Ana Navigasyon Menüsü (Sidebar).
+    Kapanıp açılan grup başlıkları ile düzenlenmiş gezinme ağacı.
+    Veritabanındaki 'Navigasyonda Göster' işaretli dinamik setleri de listeler.
+*@
+
+<nav class="yi-nav-menu">
+
+    @* ── İş Yönetimi ─────────────────────────────── *@
+    <div class="yi-nav-group">
+        <button class="yi-nav-title-btn" @onclick='() => Toggle("is")' aria-expanded="@(!IsCollapsed("is"))">
+            <span class="yi-nav-title-text">İş Yönetimi</span>
+            <i class="bi bi-chevron-@(IsCollapsed("is") ? "right" : "down") yi-nav-chevron"></i>
+        </button>
+        <div class="yi-nav-group-body @(IsCollapsed("is") ? "collapsed" : "")">
+            <NavLink href="/" Match="NavLinkMatch.All" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-house-door"></i><span>Ana Ekran</span>
+            </NavLink>
+            <NavLink href="/gorevler" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-check2-square"></i><span>Görevler</span>
+            </NavLink>
+            <NavLink href="/toplantilar" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-calendar-event"></i><span>Toplantılar</span>
+            </NavLink>
+            <NavLink href="/takvim" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-calendar3"></i><span>Takvim</span>
+            </NavLink>
+            <NavLink href="/onaylar" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-check2-circle"></i><span>Onay Merkezi</span>
+            </NavLink>
+            <NavLink href="/hedefler" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-trophy"></i><span>Hedefler (OKR)</span>
+            </NavLink>
+        </div>
+    </div>
+
+    @* ── Kişisel ──────────────────────────────────── *@
+    <div class="yi-nav-group">
+        <button class="yi-nav-title-btn" @onclick='() => Toggle("kisisel")' aria-expanded="@(!IsCollapsed("kisisel"))">
+            <span class="yi-nav-title-text">Kişisel</span>
+            <i class="bi bi-chevron-@(IsCollapsed("kisisel") ? "right" : "down") yi-nav-chevron"></i>
+        </button>
+        <div class="yi-nav-group-body @(IsCollapsed("kisisel") ? "collapsed" : "")">
+            <NavLink href="/mesajlar" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-chat-left-text"></i><span>Mesajlar</span>
+            </NavLink>
+            <NavLink href="/notlarim" class="yi-nav-link" ActiveClass="active">
+                <i class="bi bi-journal-text"></i><span>Notlarım</span>
+            </NavLink>
+        </div>
+    </div>
+
+    @* ── Dinamik Setler ───────────────────────────── *@
+    <div class="yi-nav-group">
+        <button class="yi-nav-title-btn" @onclick='() => Toggle("setler")' aria-expanded="@(!IsCollapsed("setler"))">
+            <span class="yi-nav-title-text">Dinamik Setler</span>
+            <i class="bi bi-chevron-@(IsCollapsed("setler") ? "right" : "down") yi-nav-chevron"></i>
+        </button>
+        <div class="yi-nav-group-body @(IsCollapsed("setler") ? "collapsed" : "")">
+            @if (_loading)
+            {
+                <div class="yi-nav-muted d-flex align-items-center gap-2">
+                    <span class="yi-nav-spinner" role="status" aria-label="Yükleniyor"></span>Yükleniyor...
+                </div>
+            }
+            else if (!string.IsNullOrWhiteSpace(_error))
+            {
+                <div class="yi-nav-error" role="alert"><i class="bi bi-exclamation-circle me-1"></i>Setler yüklenemedi.</div>
+            }
+            else if (_navSets.Count == 0)
+            {
+                <div class="yi-nav-muted">Menüye eklenmiş set yok.</div>
+            }
+            else
+            {
+                @foreach (var navSet in _navSets)
+                {
+                    <NavLink href="@($"/set/{navSet.Id}")" class="yi-nav-link" ActiveClass="active">
+                        <i class="bi bi-@navSet.Icon"></i><span>@navSet.Name</span>
+                    </NavLink>
+                }
+            }
+        </div>
+    </div>
+
+    @* ── Analitik & Raporlar (Müdür+) ────────────── *@
+    @if (IsManagerOrAbove)
+    {
+        <div class="yi-nav-group">
+            <button class="yi-nav-title-btn" @onclick='() => Toggle("analitik")' aria-expanded="@(!IsCollapsed("analitik"))">
+                <span class="yi-nav-title-text">Analitik & Raporlar</span>
+                <i class="bi bi-chevron-@(IsCollapsed("analitik") ? "right" : "down") yi-nav-chevron"></i>
+            </button>
+            <div class="yi-nav-group-body @(IsCollapsed("analitik") ? "collapsed" : "")">
+                <NavLink href="/analitik" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-cpu"></i><span>Kurumsal Analitik</span>
+                </NavLink>
+                <NavLink href="/raporlar" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-bar-chart-line"></i><span>Rapor Merkezi</span>
+                </NavLink>
+                <NavLink href="/gorevler/efor-raporu" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-stopwatch"></i><span>Efor Raporu</span>
+                </NavLink>
+                <NavLink href="/raporlar/zamanli" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-clock-history"></i><span>Zamanlı Raporlar</span>
+                </NavLink>
+            </div>
+        </div>
+
+        @* ── Veri Araçları (Müdür+) ──────────────────── *@
+        <div class="yi-nav-group">
+            <button class="yi-nav-title-btn" @onclick='() => Toggle("veri")' aria-expanded="@(!IsCollapsed("veri"))">
+                <span class="yi-nav-title-text">Veri Araçları</span>
+                <i class="bi bi-chevron-@(IsCollapsed("veri") ? "right" : "down") yi-nav-chevron"></i>
+            </button>
+            <div class="yi-nav-group-body @(IsCollapsed("veri") ? "collapsed" : "")">
+                <NavLink href="/sorgu" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-code-square"></i><span>Sorgu Editörü</span>
+                </NavLink>
+                <NavLink href="/sorgu-listesi/dashboard" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-layout-text-window"></i><span>Dashboard Sorguları</span>
+                </NavLink>
+                <NavLink href="/sorgu-listesi/rapor" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-file-earmark-bar-graph"></i><span>Rapor Sorguları</span>
+                </NavLink>
+                <NavLink href="/set-listesi" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-grid-1x2"></i><span>Set Yönetimi</span>
+                </NavLink>
+                <NavLink href="/gorevler/sablonlar" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-file-earmark-text"></i><span>Görev Şablonları</span>
+                </NavLink>
+                @if (IsAdmin)
+                {
+                    <NavLink href="/veri-kaynaklari" class="yi-nav-link" ActiveClass="active">
+                        <i class="bi bi-hdd-network"></i><span>Veri Kaynakları</span>
+                    </NavLink>
+                }
+            </div>
+        </div>
+    }
+
+    @* ── Yönetim (Genel Müdür) ────────────────────── *@
+    @if (IsAdmin)
+    {
+        <div class="yi-nav-group">
+            <button class="yi-nav-title-btn" @onclick='() => Toggle("yonetim")' aria-expanded="@(!IsCollapsed("yonetim"))">
+                <span class="yi-nav-title-text">Yönetim</span>
+                <i class="bi bi-chevron-@(IsCollapsed("yonetim") ? "right" : "down") yi-nav-chevron"></i>
+            </button>
+            <div class="yi-nav-group-body @(IsCollapsed("yonetim") ? "collapsed" : "")">
+                <NavLink href="/kullanicilar" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-people"></i><span>Kullanıcılar</span>
+                </NavLink>
+                <NavLink href="/ayarlar/kpi-hedefleri" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-bullseye"></i><span>KPI Hedefleri</span>
+                </NavLink>
+                <NavLink href="/admin/audit-log" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-shield-check"></i><span>Denetim İzi</span>
+                </NavLink>
+                <NavLink href="/admin/ai-dashboard" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-stars"></i><span>AI Dashboard</span>
+                </NavLink>
+                <NavLink href="/ayarlar" class="yi-nav-link" ActiveClass="active">
+                    <i class="bi bi-gear"></i><span>Sistem Ayarları</span>
+                </NavLink>
+            </div>
+        </div>
+    }
+
+    @* ── Alt Alan ─────────────────────────────────── *@
+    <div class="yi-nav-group yi-nav-group-bottom">
+        <NavLink href="/yardim" class="yi-nav-link" ActiveClass="active">
+            <i class="bi bi-book"></i><span>Yardım</span>
+        </NavLink>
+    </div>
+
+</nav>
+
+@code {
+    private bool _loading = true;
+    private bool _disposed;
+    private string? _error;
+    private readonly SemaphoreSlim _reloadLock = new(1, 1);
+
+    // Rol yardımcıları — string karşılaştırması (enum yok)
+    private bool IsAdmin          => SessionSvc.ActiveUser?.Role == "Genel Müdür";
+    private bool IsManagerOrAbove => SessionSvc.ActiveUser?.Role is "Müdür" or "Direktör" or "Genel Müdür";
+
+    // Menüde gösterilecek aktif dinamik setler
+    private List<QuerySet> _navSets = [];
+
+    // ── Accordion durumu ────────────────────────────
+    // true = kapalı (collapsed), false = açık
+    private readonly Dictionary<string, bool> _collapsed = new()
+    {
+        ["is"]       = false,   // İş Yönetimi — varsayılan açık
+        ["kisisel"]  = false,   // Kişisel — varsayılan açık
+        ["setler"]   = false,   // Dinamik Setler — varsayılan açık
+        ["analitik"] = true,    // Analitik & Raporlar — varsayılan kapalı
+        ["veri"]     = true,    // Veri Araçları — varsayılan kapalı
+        ["yonetim"]  = true,    // Yönetim — varsayılan kapalı
+    };
+
+    private bool IsCollapsed(string key) =>
+        _collapsed.TryGetValue(key, out var val) && val;
+
+    private void Toggle(string key)
+    {
+        if (_collapsed.ContainsKey(key))
+            _collapsed[key] = !_collapsed[key];
+        else
+            _collapsed[key] = true;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Sayfa değişimlerini dinle (Loglama için)
+        Nav.LocationChanged += HandleLocationChanged;
+
+        // Setlerdeki değişiklikleri dinle (Menü yenileme için)
+        SetSvc.OnChange += HandleSetChangedAsync;
+
+        await LoadNavSetsAsync();
+    }
+
+    /// <summary>
+    /// Menüde gösterilmesi planlanan setleri servisten çeker.
+    /// </summary>
+    private async Task LoadNavSetsAsync()
+    {
+        if (_disposed) return;
+
+        await _reloadLock.WaitAsync();
+        try
+        {
+            _loading = true;
+            _error = null;
+            await InvokeAsync(StateHasChanged);
+
+            _navSets = (await SetSvc.GetNavSetsAsync()).Data ?? [];
+        }
+        catch (Exception ex)
+        {
+            _error = "Setler yüklenemedi.";
+            _navSets = [];
+            Console.Error.WriteLine($"[NavMenu] LoadNavSetsAsync hata: {ex.Message}");
+        }
+        finally
+        {
+            _loading = false;
+            _reloadLock.Release();
+
+            if (!_disposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Kullanıcı linklere tıkladığında denetim günlüğü oluşturur.
+    /// </summary>
+    private void HandleLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        var localPath = new Uri(e.Location).LocalPath;
+        // Ziyaret kaydını asenkron olarak kaydet
+        _ = AuditService.SaveLogAsync("Page", "View", new { Page = localPath });
+
+        // Menüyü de arkaplanda tazele (Yeni bir set eklenmiş olabilir)
+        _ = InvokeAsync(LoadNavSetsAsync);
+    }
+
+    /// <summary>
+    /// Set servisinden gelen değişiklik bildirimini karşılar.
+    /// </summary>
+    private Task HandleSetChangedAsync() => LoadNavSetsAsync();
+
+    public void Dispose()
+    {
+        _disposed = true;
+        Nav.LocationChanged -= HandleLocationChanged;
+        SetSvc.OnChange -= HandleSetChangedAsync;
+    }
+}

@@ -1,0 +1,43 @@
+@* AI ciktisi altinda gosterilen geri bildirim widget'i *@
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Models.AI
+@inject AiOrchestrationService AiOrchestration
+
+<div class="yi-ai-feedback d-flex align-items-center gap-2 mt-2">
+    @if (!_submitted)
+    {
+        <span class="yi-ai-feedback-label">Bu faydali miydi?</span>
+        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedback(3, true)" title="Faydali">
+            <i class="bi bi-hand-thumbs-up"></i>
+        </button>
+        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedback(1, false)" title="Faydasiz">
+            <i class="bi bi-hand-thumbs-down"></i>
+        </button>
+    }
+    else
+    {
+        <span class="yi-ai-feedback-thanks">
+            <i class="bi bi-check-circle text-success"></i> Geri bildirim kaydedildi
+        </span>
+    }
+</div>
+
+@code {
+    [Parameter] public int InteractionId { get; set; }
+    [Parameter] public int UserId { get; set; }
+
+    private bool _submitted;
+
+    private async Task SubmitFeedback(int rating, bool accepted)
+    {
+        var feedback = new AiFeedback
+        {
+            InteractionId = InteractionId,
+            UserId = UserId,
+            Rating = rating,
+            WasAccepted = accepted
+        };
+        await AiOrchestration.SubmitFeedbackAsync(feedback);
+        _submitted = true;
+    }
+}

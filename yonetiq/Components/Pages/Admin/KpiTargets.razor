@@ -1,0 +1,228 @@
+@page "/ayarlar/kpi-hedefleri"
+@inject KpiTargetService KpiSvc
+@inject SessionService SessionSvc
+@inject IToastService Toast
+
+<PageTitle>KPI Hedef Değerleri</PageTitle>
+
+<PageHero Section="Ayarlar"
+          Icon="bi-bullseye"
+          Title="KPI Hedef Değerleri"
+          Subtitle="Dashboard KPI kartları için hedef değerler ve başarı kriterleri belirleyin.">
+    <Actions>
+        <button type="button" class="yi-btn-primary" @onclick="OpenCreateModal">
+            <i class="bi bi-plus-lg"></i> Yeni Hedef
+        </button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_items.Count == 0)
+{
+    <div class="yi-empty">
+        <p>Henüz KPI hedefi tanımlanmamış.</p>
+        <button type="button" class="yi-btn-primary mt-2" @onclick="OpenCreateModal">İlk hedefi ekle</button>
+    </div>
+}
+else
+{
+    <div class="yi-card">
+        <div class="yi-card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Metrik Anahtarı</th>
+                        <th>Etiket</th>
+                        <th>Hedef</th>
+                        <th>Operatör</th>
+                        <th>Periyot</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var kpi in _items)
+                    {
+                        <tr>
+                            <td><code class="small">@kpi.MetricKey</code></td>
+                            <td class="fw-semibold">@kpi.Label</td>
+                            <td>@kpi.TargetValue.ToString("N0")</td>
+                            <td>
+                                <span class="yi-badge yi-badge-light">@kpi.Operator</span>
+                            </td>
+                            <td class="small yi-muted">@(kpi.PeriodType switch { "Monthly" => "Aylık", "Weekly" => "Haftalık", _ => "Tüm Zamanlar" })</td>
+                            <td>
+                                @if (kpi.IsActive)
+                                {
+                                    <span class="yi-badge yi-badge-success">Aktif</span>
+                                }
+                                else
+                                {
+                                    <span class="yi-badge yi-badge-light">Pasif</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="yi-btn-outline yi-btn-sm me-1" @onclick="() => OpenEditModal(kpi)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="yi-btn-outline yi-btn-sm" style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                        @onclick="() => DeleteAsync(kpi.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@* ─── Modal ─── *@
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="kpiModalTitle">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="kpiModalTitle">
+                        <i class="bi bi-bullseye me-2"></i>@(_editItem.Id == 0 ? "Yeni KPI Hedefi" : "KPI Hedefini Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="yi-label">Metrik Anahtarı</label>
+                            <input type="text" class="yi-input" @bind="_editItem.MetricKey"
+                                   placeholder="Örn: total_tasks, open_meetings, completion_rate" />
+                            <div class="yi-form-hint mt-1 small">Dashboard KPI kartındaki veriyle eşleşen anahtar.</div>
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Görünen Etiket</label>
+                            <input type="text" class="yi-input" @bind="_editItem.Label" placeholder="Örn: Açık Görev Sayısı" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Hedef Değer</label>
+                            <input type="number" step="any" class="yi-input" @bind="_editItem.TargetValue" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Operatör</label>
+                            <select class="yi-select" @bind="_editItem.Operator">
+                                <option value="<=">≤ (küçük eşit)</option>
+                                <option value=">=">≥ (büyük eşit)</option>
+                                <option value="=">=  (eşit)</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Periyot</label>
+                            <select class="yi-select" @bind="_editItem.PeriodType">
+                                <option value="AllTime">Tüm Zamanlar</option>
+                                <option value="Monthly">Aylık</option>
+                                <option value="Weekly">Haftalık</option>
+                            </select>
+                        </div>
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="kpiActive" @bind="_editItem.IsActive" />
+                                <label class="form-check-label" for="kpiActive">Aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_modalError))
+                    {
+                        <div class="yi-alert yi-alert-danger mt-3">@_modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <span>Kaydet</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _showModal;
+    private bool _saving;
+    private string? _modalError;
+    private List<KpiTarget> _items = [];
+    private KpiTarget _editItem = new();
+
+    protected override async Task OnInitializedAsync() => await LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var res = await KpiSvc.ListAllAsync();
+        _items = res.IsSuccess ? (res.Data ?? []) : [];
+        _loading = false;
+    }
+
+    private void OpenCreateModal()
+    {
+        _editItem = new KpiTarget();
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private void OpenEditModal(KpiTarget item)
+    {
+        _editItem = new KpiTarget
+        {
+            Id          = item.Id,
+            MetricKey   = item.MetricKey,
+            Label       = item.Label,
+            TargetValue = item.TargetValue,
+            Operator    = item.Operator,
+            PeriodType  = item.PeriodType,
+            IsActive    = item.IsActive
+        };
+        _modalError = null;
+        _showModal = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editItem.MetricKey)) { _modalError = "Metrik anahtarı zorunludur."; return; }
+        if (string.IsNullOrWhiteSpace(_editItem.Label))     { _modalError = "Etiket zorunludur."; return; }
+
+        _saving = true;
+        _modalError = null;
+        var res = await KpiSvc.SaveAsync(_editItem, SessionSvc.ActiveUser?.UserId ?? 1);
+        _saving = false;
+        if (res.IsSuccess)
+        {
+            _showModal = false;
+            Toast.ShowSuccess("KPI hedefi kaydedildi.");
+            await LoadAsync();
+        }
+        else
+        {
+            _modalError = res.Message ?? "Kayıt başarısız.";
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var res = await KpiSvc.DeleteAsync(id, SessionSvc.ActiveUser?.UserId ?? 1);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("KPI hedefi silindi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+}

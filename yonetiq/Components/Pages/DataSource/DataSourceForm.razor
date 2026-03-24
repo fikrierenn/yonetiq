@@ -1,0 +1,613 @@
+@page "/veri-kaynaklari/yeni"
+@page "/veri-kaynaklari/{Id:int}"
+@inject DataSourceService DataSourceSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+@*
+    Veri Kaynağı Ekleme / Düzenleme Formu.
+    Bağlantı stringleri şifreli saklanır, formda açık metin gösterilir.
+    "Bağlantıyı Test Et" butonu kaydetmeden önce bağlantıyı doğrular.
+*@
+
+<PageTitle>@(_isNew ? "Yeni Veri Kaynağı" : "Veri Kaynağı Düzenle")</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-hdd-network"
+          Title="@(_isNew ? "Yeni Veri Kaynağı" : "Veri Kaynağı Düzenle")"
+          Subtitle="@(_isNew ? "Yeni bir sunucu bağlantısı ekleyin." : $"{_model.Name} bağlantısını düzenleyin.")">
+    <Actions>
+        <a class="yi-btn-outline" href="/veri-kaynaklari"><i class="bi bi-arrow-left"></i> Geri</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <div class="row g-3 justify-content-center">
+        <div class="col-12 col-xl-8">
+            <div class="yi-card">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title">Bağlantı Bilgileri</h2>
+                </div>
+                <div class="yi-card-body p-3 p-lg-4">
+                    <div class="row g-3">
+
+                        @* Ad *@
+                        <div class="col-12 col-lg-8">
+                            <label class="yi-label">Veri Kaynağı Adı <span class="text-danger">*</span></label>
+                            <input class="yi-input" @bind="_model.Name"
+                                   placeholder="Örn: ERP Sunucusu, Analitik DW, Test DB" />
+                        </div>
+
+                        @* Sunucu Tipi *@
+                        <div class="col-12 col-lg-4">
+                            <label class="yi-label">Sunucu Tipi <span class="text-danger">*</span></label>
+                            <select class="yi-select" @bind="_model.ServerType">
+                                <option value="MSSQL">MSSQL (SQL Server)</option>
+                                <option value="PostgreSQL">PostgreSQL</option>
+                                <option value="MySQL">MySQL / MariaDB</option>
+                            </select>
+                        </div>
+
+                        @* Açıklama *@
+                        <div class="col-12">
+                            <label class="yi-label">Açıklama</label>
+                            <input class="yi-input" @bind="_model.Description"
+                                   placeholder="Bu veri kaynağının amacı (isteğe bağlı)" />
+                        </div>
+
+                        @* Giriş Modu Seçimi *@
+                        <div class="col-12">
+                            <div class="d-flex align-items-center gap-2 mb-2">
+                                <span class="yi-label mb-0">Bağlantı Dizisi</span>
+                                <div class="btn-group btn-group-sm ms-auto" role="group" aria-label="Giriş modu">
+                                    <button type="button"
+                                            class="btn @(_wizardMode ? "btn-primary" : "btn-outline-secondary")"
+                                            @onclick="SwitchToWizard">
+                                        <i class="bi bi-magic me-1"></i>Sihirbaz
+                                    </button>
+                                    <button type="button"
+                                            class="btn @(!_wizardMode ? "btn-primary" : "btn-outline-secondary")"
+                                            @onclick="SwitchToRaw">
+                                        <i class="bi bi-code-slash me-1"></i>Ham Metin
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+
+                        @* ── Sihirbaz Modu ── *@
+                        @if (_wizardMode)
+                        {
+                            <div class="col-12 col-md-6">
+                                <label class="yi-label">Sunucu / Host <span class="text-danger">*</span></label>
+                                <input class="yi-input" @bind="_wHost" placeholder="@GetHostPlaceholder()" />
+                            </div>
+                            <div class="col-12 col-md-6">
+                                <label class="yi-label">Port <span class="text-muted small">(opsiyonel, varsayılan kullanmak için boş bırakın)</span></label>
+                                <input class="yi-input" @bind="_wPort" placeholder="@GetDefaultPort()" />
+                            </div>
+                            <div class="col-12">
+                                <label class="yi-label">Veritabanı <span class="text-danger">*</span></label>
+                                <input class="yi-input" @bind="_wDatabase" placeholder="Veritabanı adı" />
+                            </div>
+
+                            @* MSSQL'e özgü kimlik doğrulama *@
+                            @if (_model.ServerType == "MSSQL")
+                            {
+                                <div class="col-12">
+                                    <label class="yi-label">Kimlik Doğrulama</label>
+                                    <select class="yi-select" @bind="_wAuthType">
+                                        <option value="SQL">SQL Server Kimlik Doğrulama (Kullanıcı/Şifre)</option>
+                                        <option value="Windows">Windows Kimlik Doğrulama (Integrated Security)</option>
+                                    </select>
+                                </div>
+                            }
+
+                            @if (_model.ServerType != "MSSQL" || _wAuthType == "SQL")
+                            {
+                                <div class="col-12 col-md-6">
+                                    <label class="yi-label">Kullanıcı Adı <span class="text-danger">*</span></label>
+                                    <input class="yi-input" @bind="_wUsername" placeholder="@GetUsernamePlaceholder()" />
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <label class="yi-label">Şifre</label>
+                                    <div class="yi-input-password-wrap">
+                                        <input type="@(_showWizardPwd ? "text" : "password")"
+                                               class="yi-input" @bind="_wPassword" placeholder="••••••••" />
+                                        <button type="button" class="yi-password-toggle"
+                                                @onclick="() => _showWizardPwd = !_showWizardPwd">
+                                            <i class="bi bi-@(_showWizardPwd ? "eye-slash" : "eye")"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            }
+
+                            @* MSSQL ek seçenekler *@
+                            @if (_model.ServerType == "MSSQL")
+                            {
+                                <div class="col-12 col-md-6">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="chkTrust" @bind="_wTrustCert" />
+                                        <label class="form-check-label" for="chkTrust">
+                                            <strong>TrustServerCertificate</strong>
+                                            <div class="text-muted small">Self-signed SSL sertifikalarına izin verir.</div>
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="col-12 col-md-6">
+                                    <div class="form-check form-switch mt-2">
+                                        <input class="form-check-input" type="checkbox" id="chkEncrypt" @bind="_wEncrypt" />
+                                        <label class="form-check-label" for="chkEncrypt">
+                                            <strong>Encrypt</strong>
+                                            <div class="text-muted small">Bağlantıyı SSL/TLS ile şifreler.</div>
+                                        </label>
+                                    </div>
+                                </div>
+                            }
+
+                            @* PostgreSQL SSL *@
+                            @if (_model.ServerType == "PostgreSQL")
+                            {
+                                <div class="col-12 col-md-6">
+                                    <label class="yi-label">SSL Modu</label>
+                                    <select class="yi-select" @bind="_wPgSslMode">
+                                        <option value="Prefer">Prefer (önerilen)</option>
+                                        <option value="Require">Require</option>
+                                        <option value="Disable">Disable</option>
+                                    </select>
+                                </div>
+                            }
+
+                            @* Bağlantı Dizisi Önizleme + Oluştur Butonu *@
+                            <div class="col-12">
+                                <div class="d-flex gap-2 align-items-start flex-wrap">
+                                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="BuildConnectionString">
+                                        <i class="bi bi-gear me-1"></i>Bağlantı Dizisi Oluştur
+                                    </button>
+                                </div>
+                                @if (!string.IsNullOrWhiteSpace(_model.PlainConnectionString))
+                                {
+                                    <div class="mt-2">
+                                        <small class="text-muted d-block mb-1">Oluşturulan bağlantı dizisi:</small>
+                                        <code class="d-block yi-code-inline p-2 rounded small" style="word-break:break-all;">
+                                            @(_showConnStr ? _model.PlainConnectionString : MaskConnStr(_model.PlainConnectionString))
+                                        </code>
+                                        <button type="button" class="btn btn-link btn-sm p-0 mt-1"
+                                                @onclick="() => _showConnStr = !_showConnStr">
+                                            <i class="bi bi-@(_showConnStr ? "eye-slash" : "eye") me-1"></i>
+                                            @(_showConnStr ? "Gizle" : "Göster")
+                                        </button>
+                                    </div>
+                                }
+                                <small class="text-muted d-block mt-1">Bağlantı dizisi AES-256 şifreli olarak saklanır.</small>
+                            </div>
+                        }
+                        else
+                        {
+                            @* ── Ham Metin Modu ── *@
+                            <div class="col-12">
+                                <div class="input-group">
+                                    <input class="yi-input"
+                                           type="@(_showConnStr ? "text" : "password")"
+                                           @bind="_model.PlainConnectionString"
+                                           placeholder="@GetConnStrPlaceholder()" />
+                                    <button type="button" class="yi-btn-outline"
+                                            @onclick="() => _showConnStr = !_showConnStr"
+                                            title="@(_showConnStr ? "Gizle" : "Göster")">
+                                        <i class="bi @(_showConnStr ? "bi-eye-slash" : "bi-eye")"></i>
+                                    </button>
+                                </div>
+                                <small class="text-muted">Bağlantı dizisi AES-256 şifreli olarak saklanır.</small>
+                            </div>
+                        }
+
+                        @* Ayarlar *@
+                        <div class="col-12 col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chkDefault"
+                                       @bind="_model.IsDefault" />
+                                <label class="form-check-label" for="chkDefault">
+                                    <strong>Varsayılan Kaynak Yap</strong>
+                                    <div class="text-muted small">DataSourceId belirtilmemiş raporlar bu bağlantıyı kullanır.</div>
+                                </label>
+                            </div>
+                        </div>
+                        <div class="col-12 col-md-6">
+                            <div class="form-check form-switch">
+                                <input class="form-check-input" type="checkbox" id="chkActive"
+                                       @bind="_model.IsActive" />
+                                <label class="form-check-label" for="chkActive">
+                                    <strong>Aktif</strong>
+                                    <div class="text-muted small">Pasif kaynaklar rapor seçiminde görünmez.</div>
+                                </label>
+                            </div>
+                        </div>
+
+                        @* Test Sonucu *@
+                        @if (_testResult is not null)
+                        {
+                            <div class="col-12">
+                                <div class="alert @(_testResult == true ? "alert-success" : "alert-danger") d-flex align-items-center gap-2 py-2" role="alert">
+                                    <i class="bi @(_testResult == true ? "bi-check-circle-fill" : "bi-x-circle-fill") fs-5"></i>
+                                    <span>@_testMessage</span>
+                                </div>
+                            </div>
+                        }
+
+                        @* Form hata alanı (toast yerine satır içi) *@
+                        @if (!string.IsNullOrWhiteSpace(_formError))
+                        {
+                            <div class="col-12">
+                                <div class="yi-alert yi-alert-warning py-2">
+                                    <i class="bi bi-exclamation-triangle me-2"></i>@_formError
+                                </div>
+                            </div>
+                        }
+
+                        @* Butonlar *@
+                        <div class="col-12 d-flex gap-2 flex-wrap">
+                            <button type="button" class="yi-btn-outline"
+                                    @onclick="TestConnectionAsync"
+                                    disabled="@(_testing || _saving)">
+                                @if (_testing)
+                                {
+                                    <span class="yi-nav-spinner me-1" role="status"></span>
+                                    <span>Test ediliyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-ethernet me-1"></i>
+                                    <span>Bağlantıyı Test Et</span>
+                                }
+                            </button>
+
+                            <button type="button" class="yi-btn-primary"
+                                    @onclick="SaveAsync"
+                                    disabled="@(_saving || _testing)">
+                                @if (_saving)
+                                {
+                                    <span class="yi-nav-spinner me-1" role="status"></span>
+                                    <span>Kaydediliyor...</span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-floppy me-1"></i>
+                                    <span>Kaydet</span>
+                                }
+                            </button>
+                        </div>
+
+                        @* Bağlantı Dizisi Rehberi *@
+                        <div class="col-12">
+                            <div class="yi-card" style="background: var(--yi-body-bg)">
+                                <div class="yi-card-header py-2">
+                                    <span class="yi-card-title fs-6">Örnek Bağlantı Dizileri</span>
+                                </div>
+                                <div class="yi-card-body p-3">
+                                    @foreach (var ex in GetConnectionExamples())
+                                    {
+                                        <div class="mb-2">
+                                            <span class="yi-badge @GetServerBadgeClass(ex.Type) mb-1">@ex.Type</span>
+                                            <code class="d-block yi-code-inline p-2 rounded small">@ex.Example</code>
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </div>
+
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private bool _isNew => Id == 0;
+    private bool _loading = true;
+    private bool _saving;
+    private bool _testing;
+    private bool _showConnStr;
+    private bool? _testResult;
+    private string? _testMessage;
+    private string? _formError;
+
+    private YonetIQ.Data.Models.DataSource _model = new() { IsActive = true, ServerType = "MSSQL" };
+
+    // ─── Sihirbaz modu ───────────────────────────────────────────────────
+    private bool   _wizardMode    = false;
+    private bool   _showWizardPwd = false;
+    private string _wHost         = string.Empty;
+    private string _wPort         = string.Empty;
+    private string _wDatabase     = string.Empty;
+    private string _wAuthType     = "SQL";    // "SQL" | "Windows"
+    private string _wUsername     = string.Empty;
+    private string _wPassword     = string.Empty;
+    private bool   _wTrustCert    = true;
+    private bool   _wEncrypt      = false;
+    private string _wPgSslMode    = "Prefer";
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!_isNew)
+        {
+            var res = await DataSourceSvc.GetByIdAsync(Id);
+            if (res.IsSuccess && res.Data is not null)
+                _model = res.Data;
+            else
+            {
+                Toast.ShowError("Veri kaynağı bulunamadı.");
+                Nav.NavigateTo("/veri-kaynaklari");
+                return;
+            }
+        }
+        _loading = false;
+    }
+
+    private async Task TestConnectionAsync()
+    {
+        _formError = null;
+
+        // Sihirbaz modundaysa önce connection string'i oluştur
+        if (_wizardMode)
+            BuildConnectionString();
+
+        if (string.IsNullOrWhiteSpace(_model.PlainConnectionString))
+        {
+            _formError = _wizardMode
+                ? "Lütfen sunucu, veritabanı ve kimlik bilgilerini doldurup 'Bağlantı Dizisi Oluştur' butonuna basın veya doğrudan 'Ham Metin' modunda yazın."
+                : "Önce bağlantı dizisini girin.";
+            return;
+        }
+
+        _testing    = true;
+        _testResult = null;
+        _testMessage = null;
+
+        try
+        {
+            var (success, error) = await DataSourceService.TestConnectionAsync(
+                _model.ServerType, _model.PlainConnectionString);
+
+            _testResult  = success;
+            _testMessage = success
+                ? $"{_model.ServerType} bağlantısı başarılı ✓"
+                : $"Bağlantı başarısız: {error}";
+        }
+        catch (Exception ex)
+        {
+            _testResult  = false;
+            _testMessage = $"Test hatası: {ex.Message}";
+        }
+        finally
+        {
+            _testing = false;
+        }
+    }
+
+    private async Task SaveAsync()
+    {
+        _formError = null;
+
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            _formError = "Veri kaynağı adı zorunludur.";
+            return;
+        }
+
+        // Sihirbaz modundaysa önce connection string'i oluştur
+        if (_wizardMode)
+            BuildConnectionString();
+
+        if (string.IsNullOrWhiteSpace(_model.PlainConnectionString))
+        {
+            _formError = _wizardMode
+                ? "Sunucu ve veritabanı bilgilerini doldurduktan sonra 'Bağlantı Dizisi Oluştur' butonuna basın."
+                : "Bağlantı dizisi zorunludur.";
+            return;
+        }
+
+        _saving = true;
+        try
+        {
+            var res = await DataSourceSvc.SaveAsync(_model);
+            if (res.IsSuccess)
+            {
+                Toast.ShowSuccess(_isNew ? "Veri kaynağı eklendi." : "Değişiklikler kaydedildi.");
+                Nav.NavigateTo("/veri-kaynaklari");
+            }
+            else
+            {
+                _formError = res.Message ?? "Kaydetme başarısız.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _formError = $"Kaydetme sırasında hata oluştu: {ex.Message}";
+        }
+        finally
+        {
+            _saving = false;
+        }
+    }
+
+    // ─── Sihirbaz yardımcıları ───────────────────────────────────────────
+
+    private void SwitchToWizard()
+    {
+        ParseConnectionString(); // mevcut ham stringi parse et
+        _wizardMode = true;
+    }
+
+    private void SwitchToRaw()
+    {
+        _wizardMode = false;
+    }
+
+    /// <summary>Ham bağlantı dizisini wizard alanlarına dönüştürür (best-effort).</summary>
+    private void ParseConnectionString()
+    {
+        var cs = _model.PlainConnectionString ?? string.Empty;
+        var dict = cs.Split(';', StringSplitOptions.RemoveEmptyEntries)
+            .Select(p => p.Split('=', 2))
+            .Where(p => p.Length == 2)
+            .GroupBy(p => p[0].Trim(), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(g => g.Key, g => g.Last()[1].Trim(), StringComparer.OrdinalIgnoreCase);
+
+        string Get(params string[] keys) =>
+            keys.Select(k => dict.TryGetValue(k, out var v) ? v : null).FirstOrDefault(v => v is not null) ?? string.Empty;
+
+        switch (_model.ServerType)
+        {
+            case "MSSQL":
+                var server = Get("Server", "Data Source");
+                var commaIdx = server.IndexOf(',');
+                if (commaIdx >= 0) { _wHost = server[..commaIdx]; _wPort = server[(commaIdx + 1)..]; }
+                else               { _wHost = server; _wPort = string.Empty; }
+                _wDatabase  = Get("Database", "Initial Catalog");
+                var intSec  = Get("Integrated Security", "Trusted_Connection");
+                _wAuthType  = intSec.Equals("true", StringComparison.OrdinalIgnoreCase)
+                           || intSec.Equals("sspi", StringComparison.OrdinalIgnoreCase) ? "Windows" : "SQL";
+                _wUsername  = Get("User Id", "UID");
+                _wPassword  = Get("Password", "PWD");
+                _wTrustCert = Get("TrustServerCertificate").Equals("true", StringComparison.OrdinalIgnoreCase);
+                _wEncrypt   = Get("Encrypt").Equals("true", StringComparison.OrdinalIgnoreCase);
+                break;
+            case "PostgreSQL":
+                _wHost      = Get("Host");
+                _wPort      = Get("Port");
+                _wDatabase  = Get("Database");
+                _wUsername  = Get("Username");
+                _wPassword  = Get("Password");
+                _wPgSslMode = Get("SSL Mode");
+                if (string.IsNullOrEmpty(_wPgSslMode)) _wPgSslMode = "Prefer";
+                break;
+            case "MySQL":
+                _wHost     = Get("Server");
+                _wPort     = Get("Port");
+                _wDatabase = Get("Database");
+                _wUsername = Get("User", "Username");
+                _wPassword = Get("Password");
+                break;
+        }
+    }
+
+    /// <summary>Wizard alanlarından bağlantı dizisi üretir ve modele yazar.</summary>
+    private void BuildConnectionString()
+    {
+        _model.PlainConnectionString = _model.ServerType switch
+        {
+            "MSSQL"      => BuildMssqlConnStr(),
+            "PostgreSQL" => BuildPgConnStr(),
+            "MySQL"      => BuildMysqlConnStr(),
+            _            => _model.PlainConnectionString
+        };
+    }
+
+    private string BuildMssqlConnStr()
+    {
+        var server = string.IsNullOrWhiteSpace(_wPort) ? _wHost : $"{_wHost},{_wPort}";
+        var parts  = new System.Collections.Generic.List<string>
+        {
+            $"Server={server}",
+            $"Database={_wDatabase}"
+        };
+        if (_wAuthType == "Windows")
+            parts.Add("Integrated Security=True");
+        else
+        {
+            parts.Add($"User Id={_wUsername}");
+            parts.Add($"Password={_wPassword}");
+        }
+        if (_wTrustCert) parts.Add("TrustServerCertificate=True");
+        if (_wEncrypt)   parts.Add("Encrypt=True");
+        return string.Join(";", parts);
+    }
+
+    private string BuildPgConnStr()
+    {
+        var parts = new System.Collections.Generic.List<string>
+        {
+            $"Host={_wHost}",
+            $"Database={_wDatabase}",
+            $"Username={_wUsername}",
+            $"Password={_wPassword}"
+        };
+        if (!string.IsNullOrWhiteSpace(_wPort))      parts.Add($"Port={_wPort}");
+        if (_wPgSslMode != "Prefer" && !string.IsNullOrWhiteSpace(_wPgSslMode))
+            parts.Add($"SSL Mode={_wPgSslMode}");
+        return string.Join(";", parts);
+    }
+
+    private string BuildMysqlConnStr()
+    {
+        var parts = new System.Collections.Generic.List<string>
+        {
+            $"Server={_wHost}",
+            $"Database={_wDatabase}",
+            $"User={_wUsername}",
+            $"Password={_wPassword}"
+        };
+        if (!string.IsNullOrWhiteSpace(_wPort)) parts.Add($"Port={_wPort}");
+        return string.Join(";", parts) + ";";
+    }
+
+    private static string MaskConnStr(string cs)
+    {
+        // Şifre değerini maskele
+        return System.Text.RegularExpressions.Regex.Replace(
+            cs,
+            @"(Password|PWD|pwd)\s*=\s*[^;]+",
+            m => m.Value.Split('=')[0] + "=********",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+    }
+
+    private string GetHostPlaceholder() => _model.ServerType switch
+    {
+        "PostgreSQL" => "db.example.com",
+        "MySQL"      => "db.example.com",
+        _            => "SUNUCU\\SQLEXPRESS veya 192.168.1.10"
+    };
+
+    private string GetDefaultPort() => _model.ServerType switch
+    {
+        "PostgreSQL" => "5432",
+        "MySQL"      => "3306",
+        _            => "1433"
+    };
+
+    private string GetUsernamePlaceholder() => _model.ServerType switch
+    {
+        "PostgreSQL" => "postgres",
+        "MySQL"      => "root",
+        _            => "sa"
+    };
+
+    private string GetConnStrPlaceholder() => _model.ServerType switch
+    {
+        "PostgreSQL" => "Host=sunucu;Database=db;Username=user;Password=pass",
+        "MySQL"      => "Server=sunucu;Database=db;User=user;Password=pass;",
+        _            => "Server=SUNUCU;Database=DB;Integrated Security=True;"
+    };
+
+    private static string GetServerBadgeClass(string serverType) => serverType.ToUpperInvariant() switch
+    {
+        "POSTGRESQL" or "POSTGRES" or "PG" => "yi-badge-info",
+        "MYSQL" or "MARIADB"               => "yi-badge-warning",
+        _                                  => "yi-badge-primary"
+    };
+
+    private static IEnumerable<(string Type, string Example)> GetConnectionExamples() =>
+    [
+        ("MSSQL",      "Server=HOST\\SQLEXPRESS;Database=MyDB;Integrated Security=True;TrustServerCertificate=True"),
+        ("MSSQL",      "Server=HOST,1433;Database=MyDB;User Id=sa;Password=****;TrustServerCertificate=True"),
+        ("PostgreSQL", "Host=HOST;Port=5432;Database=MyDB;Username=postgres;Password=****"),
+        ("MySQL",      "Server=HOST;Port=3306;Database=MyDB;User=root;Password=****;"),
+    ];
+}

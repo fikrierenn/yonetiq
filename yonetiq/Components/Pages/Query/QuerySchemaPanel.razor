@@ -1,0 +1,37 @@
+@* Sol panel: Veritabanı tablo ve kolon şeması. Tablo/kolon ismini SQL alanına eklemek için callback kullanır. *@
+<div class="yi-card h-100">
+    <div class="yi-card-header">
+        <h2 class="yi-card-title">Tablo Şeması</h2>
+    </div>
+    <div class="yi-card-body p-3">
+        @if (Schema.Count == 0)
+        {
+            <div class="yi-empty">Tablo bilgisi okunamadı.</div>
+        }
+        else
+        {
+            @foreach (var kv in Schema.OrderBy(x => x.Key))
+            {
+                <details class="yi-schema-item">
+                    <summary class="yi-schema-summary">@kv.Key</summary>
+                    <div class="yi-schema-actions">
+                        <button type="button" class="yi-btn-outline yi-btn-sm w-100 justify-content-start" @onclick="() => OnAppendSql.InvokeAsync(kv.Key)">Tabloyu Ekle</button>
+                        @foreach (var kolon in kv.Value)
+                        {
+                            var token = $"[{kv.Key}].[{kolon}]";
+                            <button type="button" class="yi-btn-light yi-btn-sm w-100 justify-content-start" @onclick="() => OnAppendSql.InvokeAsync(token)">@kolon</button>
+                        }
+                    </div>
+                </details>
+            }
+        }
+    </div>
+</div>
+
+@code {
+    /// <summary>Tablo adı → kolon listesi şeması.</summary>
+    [Parameter] public IReadOnlyDictionary<string, List<string>> Schema { get; set; } = new Dictionary<string, List<string>>();
+
+    /// <summary>Kullanıcı tablo veya kolon seçtiğinde bu token (tablo adı veya [Tablo].[Kolon]) SQL alanına eklenir.</summary>
+    [Parameter] public EventCallback<string> OnAppendSql { get; set; }
+}

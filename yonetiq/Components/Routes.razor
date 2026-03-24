@@ -1,0 +1,73 @@
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<Router AppAssembly="typeof(Program).Assembly" OnNavigateAsync="OnNavigateAsync">
+    <Found Context="routeData">
+        <RouteView RouteData="routeData" DefaultLayout="typeof(YonetIQ.Components.Layout.MainLayout)" />
+        <FocusOnNavigate RouteData="routeData" Selector="h1" />
+    </Found>
+    <NotFound>
+        <LayoutView Layout="typeof(YonetIQ.Components.Layout.MainLayout)">
+            <div class="yi-alert yi-alert-warning m-4" role="alert">
+                Sayfa bulunamadı.
+            </div>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    // Giriş gerektirmeyen yollar
+    private static readonly HashSet<string> _publicPaths = new(StringComparer.OrdinalIgnoreCase)
+    {
+        "giris", "sifremi-unuttum", "sifre-sifirla"
+    };
+
+    // Sadece Admin (Genel Müdür) erişebilir
+    private static readonly string[] _adminPrefixes =
+    [
+        "kullanicilar", "admin/", "ayarlar", "veri-kaynaklari"
+    ];
+
+    // Müdür ve üstü erişebilir
+    private static readonly string[] _managerPrefixes =
+    [
+        "analitik", "raporlar", "sorgu", "sorgu-listesi", "set-listesi",
+        "gorevler/efor-raporu", "gorevler/sablonlar"
+    ];
+
+    private Task OnNavigateAsync(NavigationContext ctx)
+    {
+        var path = ctx.Path.TrimStart('/');
+
+        // Giriş yapılmamışsa ve public route değilse → login
+        if (!SessionSvc.IsLoggedIn)
+        {
+            if (!_publicPaths.Contains(path))
+                Nav.NavigateTo("/giris", forceLoad: false);
+            return Task.CompletedTask;
+        }
+
+        var role = SessionSvc.ActiveUser?.Role ?? string.Empty;
+        bool isAdmin         = role == "Genel Müdür";
+        bool isManagerOrAbove = role is "Müdür" or "Direktör" or "Genel Müdür";
+
+        // Admin korumalı sayfalar
+        if (!isAdmin && _adminPrefixes.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return Task.CompletedTask;
+        }
+
+        // Müdür+ korumalı sayfalar
+        if (!isManagerOrAbove && _managerPrefixes.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase)))
+        {
+            Nav.NavigateTo("/", forceLoad: false);
+            return Task.CompletedTask;
+        }
+
+        return Task.CompletedTask;
+    }
+}
+
+
+

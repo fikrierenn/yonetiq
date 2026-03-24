@@ -1,0 +1,124 @@
+@page "/analitik"
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@using YonetIQ.Components.Shared.AI
+@inject AnalyticsService AnalyticsSvc
+
+<PageTitle>Kurumsal Zeka ve Analitik</PageTitle>
+
+<PageHero Section="Yönetim Paneli"
+          Icon="bi-cpu-fill"
+          Title="Kurumsal Zeka"
+          Subtitle="Verimlilik metrikleri ve operasyonel performans analizi.">
+    <Actions>
+        <button class="yi-btn-primary" @onclick="RefreshAll"><i class="bi bi-arrow-clockwise"></i> Verileri Güncelle</button>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+    </Actions>
+</PageHero>
+
+@if (_isLoading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else
+{
+    <div class="row g-4 mb-4">
+        @* Üst satır: Dağılım ve Aktivite Grafikeleri *@
+        <div class="col-lg-6">
+            <div class="yi-card h-100 analytics-premium-card">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">Görev Durum Dağılımı</h2>
+                    <span class="badge bg-light text-primary">Canlı</span>
+                </div>
+                <div class="yi-card-body">
+                    <ApexRenderer Result="_statusResult" ResultType="DonutChart" />
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="yi-card h-100 analytics-premium-card">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">Mesajlaşma Aktivitesi</h2>
+                    <span class="badge bg-light text-warning">Kullanıcı Bazlı</span>
+                </div>
+                <div class="yi-card-body">
+                    <ApexRenderer Result="_messageResult" ResultType="BarChart" />
+                </div>
+            </div>
+        </div>
+
+        @* Alt satır: geniş trend grafiği *@
+        <div class="col-12">
+            <div class="yi-card analytics-premium-card">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">Görev Verimlilik Trendi</h2>
+                    <div class="small text-muted">Günlük Tamamlanan vs Toplam Aksiyon</div>
+                </div>
+                <div class="yi-card-body">
+                    <ApexRenderer Result="_trendResult" ResultType="AreaChart" />
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<style>
+    .analytics-premium-card {
+        border: none;
+        box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        transition: transform 0.3s ease;
+    }
+    .analytics-premium-card:hover {
+        transform: translateY(-5px);
+    }
+    .yi-card-header {
+        background: transparent;
+        border-bottom: 1px solid rgba(0,0,0,0.05);
+        padding: 1.25rem;
+    }
+    .yi-card-title {
+        font-weight: 700;
+        color: var(--yi-primary);
+        font-size: 1.1rem;
+        margin-bottom: 0;
+    }
+</style>
+
+<AiSidebar @ref="_aiSidebar" Module="dashboard" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams = new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private bool _isLoading = true;
+    private QueryResult _statusResult = default!;
+    private QueryResult _messageResult = default!;
+    private QueryResult _trendResult = default!;
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadData();
+    }
+
+    private async Task RefreshAll() => await LoadData();
+
+    /// <summary>
+    /// Analitik grafik verilerini servis katmanından yükler. SQL bu sayfada değil AnalyticsService içinde tanımlıdır.
+    /// </summary>
+    private async Task LoadData()
+    {
+        _isLoading = true;
+
+        var trendRes = await AnalyticsSvc.GetTaskTrendResultAsync();
+        _trendResult = trendRes.IsSuccess && trendRes.Data != null ? trendRes.Data : new QueryResult { Name = "Görev Verimlilik Trendi" };
+
+        var msgRes = await AnalyticsSvc.GetMessageActivityResultAsync();
+        _messageResult = msgRes.IsSuccess && msgRes.Data != null ? msgRes.Data : new QueryResult { Name = "Mesajlaşma Aktivitesi" };
+
+        var statusRes = await AnalyticsSvc.GetTaskStatusDistributionResultAsync();
+        _statusResult = statusRes.IsSuccess && statusRes.Data != null ? statusRes.Data : new QueryResult { Name = "Görev Durum Dağılımı" };
+
+        _isLoading = false;
+    }
+}

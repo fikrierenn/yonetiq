@@ -1,0 +1,361 @@
+@page "/set/yeni"
+@page "/set/duzenle/{Id:int}"
+@inject QuerySetService SetSvc
+@inject QueryService QuerySvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+@* 
+    Dashboard / Set Tanımlama ve Sorgu Eşleştirme Formu.
+    Bir setin temel bilgilerini (ad, ikon, menü sırası) belirler 
+    ve içerisine hangi sorguların (QueryRecord) dahil edileceğini yönetir.
+*@
+
+<PageTitle>Set Formu</PageTitle>
+
+<PageHero Section="Sorgu Panoları"
+          Icon="bi-layout-text-window"
+          Title="@FormTitle"
+          Subtitle="Sorgu setlerini düzenleyip dashboard ve rapor sayfalarını oluşturun.">
+    <Actions>
+        <a class="yi-btn-outline" href="/set-listesi">Listeye Dön</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <div class="row g-3">
+        @* Sol Kolon: Set Temel Bilgileri *@
+        <div class="col-12 col-lg-5">
+            <div class="yi-card h-full">
+                <div class="yi-card-header"><h2 class="yi-card-title">Set Bilgileri</h2></div>
+                <div class="yi-card-body p-4">
+                    <div class="mb-3">
+                        <label class="yi-label">Set Adı</label>
+                        <input class="yi-input" @bind="_model.Name" placeholder="Dashboard başlığı..." />
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="yi-label">Açıklama</label>
+                        <textarea class="yi-input" @bind="_model.Description" rows="2" placeholder="Bu set ne amaçla kullanılıyor?"></textarea>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="yi-label">Set Tipi</label>
+                        <select class="yi-select" value="@_model.Type" @onchange="OnSetTypeChangedAsync">
+                            @foreach (var tip in _setTypeLookups)
+                            {
+                                <option value="@tip.Value">@tip.Value</option>
+                            }
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="yi-label">İkon (Bootstrap Icon)</label>
+                        <div class="input-group">
+                            <span class="input-group-text bg-light text-primary"><i class="bi bi-@_model.Icon"></i></span>
+                            <input class="yi-input" @bind="_model.Icon" placeholder="Örn: grid, bar-chart, graph-up..." />
+                        </div>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <input id="menu-goster" type="checkbox" class="yi-check" @bind="_model.ShowInNavMenu" />
+                        <label for="menu-goster" class="yi-label-inline">Yan menüde gösterilsin</label>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="yi-label">Menü Sıralaması</label>
+                        <input type="number" min="0" max="999" class="yi-input" @bind="_model.NavMenuOrder" />
+                    </div>
+
+                    <div class="d-flex gap-2 mt-4 pt-2 border-top">
+                        <button type="button" class="yi-btn-primary" @onclick="SaveAsync">
+                            <i class="bi bi-save"></i> Kaydet
+                        </button>
+                        <a class="yi-btn-outline" href="/set-listesi">İptal</a>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* Sağ Kolon: Sorgu Eşleştirme Paneli *@
+        <div class="col-12 col-lg-7">
+            <div class="yi-card h-full">
+                <div class="yi-card-header"><h2 class="yi-card-title">Set İçindeki Sorgular</h2></div>
+                <div class="yi-card-body p-4">
+                    <p class="yi-muted small mb-3">Sorgu havuzu seçilen sete göre otomatik filtrelenir.</p>
+                    
+                    @* Yeni Sorgu Ekleme Alanı *@
+                    <div class="row g-2 mb-4">
+                        <div class="col-12 col-md-8">
+                            <select class="yi-select" value="@_selectedQueryId" @onchange="OnQuerySelectionChanged">
+                                <option value="0">Eklenecek sorguyu seçin...</option>
+                                @foreach (var query in _availableQueries)
+                                {
+                                    <option value="@query.Id">@query.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-12 col-md-4">
+                            <button type="button" class="yi-btn-outline-primary w-100" @onclick="AddQuery">
+                                <i class="bi bi-plus-lg"></i> Listeye Ekle
+                            </button>
+                        </div>
+                    </div>
+
+                    @* Mevcut Sorgular Tablosu *@
+                    @if (_selectedQueries.Count == 0)
+                    {
+                        <div class="yi-empty py-5">Henüz bu sete eklenmiş bir sorgu yok.</div>
+                    }
+                    else
+                    {
+                        <div class="overflow-x-auto">
+                            <table class="yi-table yi-table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Sorgu Adı</th>
+                                        <th style="width: 80px;">Sıra</th>
+                                        <th style="width: 120px;">Genişlik</th>
+                                        <th class="text-right">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _selectedQueries.OrderBy(x => x.OrderIndex))
+                                    {
+                                        <tr>
+                                            <td class="small fw-semibold">@item.Name</td>
+                                            <td>
+                                                <input type="number" min="0" max="999" class="yi-input py-1 text-center" @bind="item.OrderIndex" />
+                                            </td>
+                                            <td>
+                                                <select class="yi-select py-1" @bind="item.WidthMd">
+                                                    <option value="3">Çeyrek (3)</option>
+                                                    <option value="4">Üçte Bir (4)</option>
+                                                    <option value="6">Yarım (6)</option>
+                                                    <option value="8">Üçte İki (8)</option>
+                                                    <option value="12">Tam (12)</option>
+                                                </select>
+                                            </td>
+                                            <td class="text-right">
+                                                <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => RemoveQuery(item.QueryId)">
+                                                    <i class="bi bi-x-lg"></i>
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    @* URL'den gelen opsiyonel ID *@
+    [Parameter] public int? Id { get; set; }
+
+    private bool _loading = true;
+    private int _selectedQueryId;
+    private string FormTitle => _model.Id == 0 ? "Yeni Set Oluştur" : "Seti Düzenle";
+
+    private QuerySet _model = new()
+    {
+        Type = "Dashboard",
+        Icon = "grid",
+        ShowInNavMenu = true
+    };
+
+    private List<Lookup> _setTypeLookups = [];
+    private List<QueryRecord> _availableQueries = [];
+    private List<SelectedQueryModel> _selectedQueries = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        _setTypeLookups = await LookupSvc.ListByGroupAsync("SetType");
+
+        if (Id.HasValue)
+        {
+            // Mevcut set verilerini yükle
+            var setRes = await SetSvc.GetByIdAsync(Id.Value);
+            if (setRes.IsSuccess && setRes.Data is not null)
+            {
+                _model = setRes.Data;
+                // Set içindeki sorguları getir
+                var queriesRes = await SetSvc.GetSetQueriesAsync(_model.Id);
+                if (queriesRes.IsSuccess)
+                {
+                    _selectedQueries = (queriesRes.Data ?? [])
+                        .Select(x => new SelectedQueryModel
+                        {
+                            QueryId = x.Query.Id,
+                            Name = x.Query.Name,
+                            OrderIndex = x.Meta.OrderIndex,
+                            WidthMd = x.Meta.WidthMd
+                        })
+                        .OrderBy(x => x.OrderIndex)
+                        .ToList();
+                }
+            }
+        }
+
+        // Seçilebilir sorgu havuzunu doldur
+        await LoadAvailableQueriesAsync();
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Set tipine uygun sorgu havuzunu filtreleyerek yükler.
+    /// </summary>
+    private async Task LoadAvailableQueriesAsync()
+    {
+        int[] purposeIds;
+        bool getAll = false;
+
+        if (_model.Type == "Dashboard" || _model.Type == "KpiPanel")
+        {
+            var dashId = await LookupSvc.GetLookupIdAsync("QueryUsage", "Dashboard");
+            var bothId = await LookupSvc.GetLookupIdAsync("QueryUsage", "Both");
+            purposeIds = new[] { dashId.Data, bothId.Data }.Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+        }
+        else if (_model.Type == "Report")
+        {
+            var repId = await LookupSvc.GetLookupIdAsync("QueryUsage", "Report");
+            var bothId = await LookupSvc.GetLookupIdAsync("QueryUsage", "Both");
+            purposeIds = new[] { repId.Data, bothId.Data }.Where(x => x.HasValue).Select(x => x!.Value).ToArray();
+        }
+        else
+        {
+            purposeIds = [];
+            getAll = true;
+        }
+
+        var result = getAll
+            ? await QuerySvc.GetAllQueriesAsync()
+            : await QuerySvc.GetQueriesByPurposeAsync(purposeIds);
+
+        if (result.IsSuccess)
+        {
+            _availableQueries = (result.Data ?? []).OrderBy(x => x.Name).ToList();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+
+    /// <summary>
+    /// Set tipi değiştiğinde sorgu havuzunu yeniden filtrele.
+    /// </summary>
+    private async Task OnSetTypeChangedAsync(ChangeEventArgs e)
+    {
+        var type = e.Value?.ToString() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(type))
+        {
+            _model.Type = type;
+            await LoadAvailableQueriesAsync();
+            _selectedQueryId = 0;
+        }
+    }
+
+    private void OnQuerySelectionChanged(ChangeEventArgs e)
+    {
+        _selectedQueryId = int.TryParse(e.Value?.ToString(), out var id) ? id : 0;
+    }
+
+    /// <summary>
+    /// Seçilen sorguyu geçici listeye ekler.
+    /// </summary>
+    private void AddQuery()
+    {
+        if (_selectedQueryId <= 0) return;
+
+        if (_selectedQueries.Any(x => x.QueryId == _selectedQueryId))
+        {
+            Toast.ShowInfo("Bu sorgu zaten listede mevcut.");
+            return;
+        }
+
+        var query = _availableQueries.FirstOrDefault(x => x.Id == _selectedQueryId);
+        if (query is null) return;
+
+        _selectedQueries.Add(new SelectedQueryModel
+        {
+            QueryId = query.Id,
+            Name = query.Name,
+            OrderIndex = _selectedQueries.Count,
+            WidthMd = 6
+        });
+    }
+
+    /// <summary>
+    /// Sorguyu geçici listeden çıkartır.
+    /// </summary>
+    private void RemoveQuery(int queryId)
+    {
+        _selectedQueries = _selectedQueries.Where(x => x.QueryId != queryId).ToList();
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_model.Name))
+        {
+            Toast.ShowWarning("Lütfen bir set adı giriniz.");
+            return;
+        }
+
+        // Önce seti kaydet
+        var saveResult = await SetSvc.SaveAsync(_model);
+        if (!saveResult.IsSuccess)
+        {
+            Toast.ShowError(saveResult.Message);
+            return;
+        }
+
+        var setId = saveResult.Data;
+        _model.Id = setId;
+
+        // Mevcut eşleşmeleri temizleyip yenilerini ekle (Basit senkronizasyon stratejisi)
+        var currentLinksRes = await SetSvc.GetSetQueriesAsync(setId);
+        if (currentLinksRes.IsSuccess)
+        {
+            foreach (var link in currentLinksRes.Data ?? [])
+            {
+                await SetSvc.RemoveQueryFromSetAsync(link.Meta.Id);
+            }
+        }
+
+        foreach (var item in _selectedQueries.OrderBy(x => x.OrderIndex))
+        {
+            await SetSvc.AddQueryToSetAsync(setId, item.QueryId, item.WidthMd, item.OrderIndex);
+        }
+
+        Toast.ShowSuccess("Sorgu seti başarıyla kaydedildi.");
+        Nav.NavigateTo($"/set/duzenle/{setId}");
+    }
+
+    /// <summary>
+    /// Form içerisinde seçili sorgu verilerini tutan yardımcı model.
+    /// </summary>
+    private sealed class SelectedQueryModel
+    {
+        public int QueryId { get; set; }
+        public string Name { get; set; } = string.Empty;
+        public int OrderIndex { get; set; }
+        public int WidthMd { get; set; } = 6;
+    }
+}
+
+
+
+
+
+

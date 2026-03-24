@@ -1,0 +1,44 @@
+@if (Result is null)
+{
+    return;
+}
+
+@if (Result.Rows.Count == 0)
+{
+    <div class="yi-alert yi-alert-info" role="alert">Gösterilecek kayıt bulunamadı.</div>
+}
+else
+{
+    @* Dinamik Tablo Yapısı *@
+    <div class="overflow-x-auto">
+        <table class="yi-table yi-table-sm">
+            <thead>
+                <tr>
+                    @foreach (var column in Result.Columns)
+                    {
+                        <th>@column</th>
+                    }
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in Result.Rows)
+                {
+                    <tr>
+                        @foreach (var column in Result.Columns)
+                        {
+                            <td>@(row.TryGetValue(column, out var value) ? value : null)</td>
+                        }
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// Tabloda listelenecek sorgu sonucu.
+    /// </summary>
+    [Parameter, EditorRequired] public QueryResult Result { get; set; } = default!;
+}
+

@@ -1,0 +1,66 @@
+@if (Result is null)
+{
+    return;
+}
+
+@if (!Result.IsSuccess)
+{
+    @* Hata durumu: SQL hatası veya bağlantı problemi *@
+    <div class="yi-alert yi-alert-danger" role="alert">
+        <i class="bi bi-exclamation-triangle-fill me-2"></i>
+        @Result.ErrorMessage
+    </div>
+}
+else if (Result.Rows.Count == 0)
+{
+    @* Bilgi durumu: Sorgu başarılı ancak veri yok *@
+    <div class="yi-alert yi-alert-info" role="alert">
+        <i class="bi bi-info-circle-fill me-2"></i>
+        Sorgu sonucunda herhangi bir kayıt bulunamadı.
+    </div>
+}
+else
+{
+    @* Veri görselleştirme seçimi — ResultType artık DB'den gelen string değerdir *@
+    @switch (ResultType)
+    {
+        case "Table":
+            <DynamicTable Result="Result" />
+            break;
+
+        case "PivotTable":
+            <PivotTable Result="Result" />
+            break;
+
+        case "KpiCard":
+            <KpiCard Result="Result" Color="@Color" />
+            break;
+
+        case "MultiKpi":
+            <KpiCard Result="Result" Color="@Color" IsMulti="true" />
+            break;
+
+        default:
+            @* Tüm grafik tipleri ApexRenderer üzerinden işlenir *@
+            <ApexRenderer Result="Result" ResultType="@ResultType" />
+            break;
+    }
+}
+
+@code {
+    /// <summary>
+    /// Görselleştirilecek olan sorgu sonuç kümesi.
+    /// </summary>
+    [Parameter, EditorRequired] public QueryResult Result { get; set; } = default!;
+
+    /// <summary>
+    /// Verinin görselleştirilme biçimi — DB'deki "ResultType" Lookup grubundan gelen string değer.
+    /// (Örn: "Table", "BarChart", "KpiCard")
+    /// </summary>
+    [Parameter] public string ResultType { get; set; } = "Table";
+
+    /// <summary>
+    /// Görsel bileşenlerde kullanılacak ana renk.
+    /// </summary>
+    [Parameter] public string Color { get; set; } = "#1976d2";
+}

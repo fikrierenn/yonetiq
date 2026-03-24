@@ -1,0 +1,113 @@
+@using YonetIQ.Data.Services
+@inject GlobalSearchService SearchService
+@inject NavigationManager Nav
+@implements IDisposable
+
+<div class="yi-global-search @(_isOpen ? "open" : "")">
+    <div class="yi-search-input-wrap">
+        <i class="bi bi-search"></i>
+        <input type="text" class="yi-search-input" placeholder="Ara... (görev, toplantı, not, rapor)"
+               @bind="_query" @bind:event="oninput" @onkeydown="HandleKeyDown"
+               @onfocus="() => _isOpen = true" />
+        @if (_searching)
+        {
+            <div class="spinner-border spinner-border-sm text-muted" role="status"></div>
+        }
+    </div>
+
+    @if (_isOpen && _results.Count > 0)
+    {
+        <div class="yi-search-backdrop" @onclick="Close"></div>
+        <div class="yi-search-dropdown">
+            @foreach (var group in _results.GroupBy(r => r.Category))
+            {
+                <div class="yi-search-category">@group.First().CategoryLabel</div>
+                @foreach (var item in group)
+                {
+                    <a class="yi-search-item" href="@item.Url" @onclick="Close">
+                        <i class="bi @item.Icon"></i>
+                        <div class="yi-search-item-text">
+                            <div class="yi-search-item-title">@item.Title</div>
+                            @if (!string.IsNullOrWhiteSpace(item.Subtitle))
+                            {
+                                <div class="yi-search-item-sub">@item.Subtitle</div>
+                            }
+                        </div>
+                    </a>
+                }
+            }
+        </div>
+    }
+    else if (_isOpen && !_searching && !string.IsNullOrWhiteSpace(_query) && _query.Length >= 2)
+    {
+        <div class="yi-search-backdrop" @onclick="Close"></div>
+        <div class="yi-search-dropdown">
+            <div class="yi-search-empty">Sonuç bulunamadı</div>
+        </div>
+    }
+</div>
+
+@code {
+    private string _query = string.Empty;
+    private bool _isOpen;
+    private bool _searching;
+    private List<SearchResult> _results = [];
+    private System.Timers.Timer? _debounceTimer;
+
+    private void HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape") { Close(); return; }
+
+        // Debounce: wait 300ms after last keystroke
+        _debounceTimer?.Stop();
+        _debounceTimer?.Dispose();
+        _debounceTimer = new System.Timers.Timer(300);
+        _debounceTimer.Elapsed += async (s, args) =>
+        {
+            _debounceTimer?.Stop();
+            await InvokeAsync(async () =>
+            {
+                await PerformSearch();
+                StateHasChanged();
+            });
+        };
+        _debounceTimer.AutoReset = false;
+        _debounceTimer.Start();
+    }
+
+    private async Task PerformSearch()
+    {
+        if (string.IsNullOrWhiteSpace(_query) || _query.Length < 2)
+        {
+            _results = [];
+            return;
+        }
+
+        _searching = true;
+        try
+        {
+            var result = await SearchService.SearchAsync(_query);
+            _results = result is { IsSuccess: true, Data: not null } ? result.Data : [];
+        }
+        catch
+        {
+            _results = [];
+        }
+        finally
+        {
+            _searching = false;
+        }
+    }
+
+    private void Close()
+    {
+        _isOpen = false;
+        _query = string.Empty;
+        _results = [];
+    }
+
+    public void Dispose()
+    {
+        _debounceTimer?.Dispose();
+    }
+}

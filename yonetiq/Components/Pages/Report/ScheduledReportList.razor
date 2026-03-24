@@ -1,0 +1,308 @@
+@page "/raporlar/zamanli"
+@inject ScheduledReportService ScheduledSvc
+@inject QueryService QuerySvc
+@inject SessionService SessionSvc
+@inject IToastService Toast
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@using Blazored.Toast.Services
+
+<PageTitle>Zamanlı Raporlar</PageTitle>
+
+<div class="yi-page-hero mb-4">
+    <div class="d-flex align-items-center justify-content-between flex-wrap gap-2">
+        <div>
+            <div class="yi-muted small mb-1"><i class="bi bi-bar-chart-line me-1"></i>Raporlama</div>
+            <h4 class="mb-0 fw-semibold"><i class="bi bi-clock-history me-2"></i>Zamanlı Raporlar</h4>
+            <div class="yi-muted small mt-1">Otomatik olarak çalışıp e-posta veya Telegram ile gönderilen zamanlanmış raporlar.</div>
+        </div>
+        <div>
+            <button type="button" class="yi-btn-primary" @onclick="OpenCreateModal">
+                <i class="bi bi-plus-lg"></i> Yeni Zamanlı Rapor
+            </button>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_items.Count == 0)
+{
+    <div class="yi-empty">Henüz zamanlanmış rapor yok. Yeni bir tane ekleyin.</div>
+}
+else
+{
+    <div class="yi-card">
+        <div class="yi-card-body p-0">
+            <table class="table table-hover mb-0">
+                <thead>
+                    <tr>
+                        <th>Başlık</th>
+                        <th>Rapor</th>
+                        <th>Kanal</th>
+                        <th>Sıklık</th>
+                        <th>Sonraki Çalışma</th>
+                        <th>Durum</th>
+                        <th></th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in _items)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@row.Title</td>
+                            <td class="yi-muted small">@row.QueryName</td>
+                            <td>
+                                @if (row.Channel == "Telegram")
+                                {
+                                    <span class="yi-badge" style="background:rgba(0,136,204,.12);color:#0088cc">
+                                        <i class="bi bi-telegram me-1"></i>Telegram
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span class="yi-badge" style="background:rgba(227,30,36,.1);color:var(--yi-primary)">
+                                        <i class="bi bi-envelope me-1"></i>E-posta
+                                    </span>
+                                }
+                            </td>
+                            <td class="small">
+                                @(row.FrequencyType switch {
+                                    "Weekly"  => $"Haftalık ({DayName(row.DayOfWeek)})",
+                                    "Monthly" => $"Aylık ({row.DayOfMonth}. gün)",
+                                    _         => "Günlük"
+                                })
+                                <span class="yi-muted ms-1">@row.RunTime.ToString("HH:mm")</span>
+                            </td>
+                            <td class="small">
+                                @(row.NextRunAt.HasValue ? row.NextRunAt.Value.ToLocalTime().ToString("dd.MM.yyyy HH:mm") : "—")
+                            </td>
+                            <td>
+                                @if (row.IsActive)
+                                {
+                                    <span class="yi-badge yi-badge-success">Aktif</span>
+                                }
+                                else
+                                {
+                                    <span class="yi-badge yi-badge-light">Pasif</span>
+                                }
+                            </td>
+                            <td class="text-end">
+                                <button class="yi-btn-outline yi-btn-sm me-1" @onclick="() => OpenEditModal(row)">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="yi-btn-outline yi-btn-sm" style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                        @onclick="() => DeleteAsync(row.Id)">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@* ─── Modal ─── *@
+@if (_showModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="srModalTitle">
+        <div class="modal-dialog modal-dialog-centered modal-lg">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="srModalTitle">
+                        <i class="bi bi-clock-history me-2"></i>@(_editItem.Id == 0 ? "Yeni Zamanlı Rapor" : "Zamanlı Raporu Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3">
+                        <div class="col-12">
+                            <label class="yi-label">Başlık</label>
+                            <input type="text" class="yi-input" @bind="_editItem.Title" placeholder="Örn: Haftalık Satış Raporu" />
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Rapor</label>
+                            <select class="yi-select" @bind="_editItem.QueryRecordId">
+                                <option value="0">Seçiniz...</option>
+                                @foreach (var q in _queries)
+                                {
+                                    <option value="@q.Id">@q.Name</option>
+                                }
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Gönderim Kanalı</label>
+                            <select class="yi-select" @bind="_editItem.Channel">
+                                <option value="Email">E-posta</option>
+                                <option value="Telegram">Telegram</option>
+                            </select>
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Alıcı</label>
+                            <input type="text" class="yi-input" @bind="_editItem.Recipient"
+                                   placeholder="email@sirket.com veya Telegram Chat ID" />
+                        </div>
+                        <div class="col-md-4">
+                            <label class="yi-label">Sıklık</label>
+                            <select class="yi-select" @bind="_editItem.FrequencyType">
+                                <option value="Daily">Günlük</option>
+                                <option value="Weekly">Haftalık</option>
+                                <option value="Monthly">Aylık</option>
+                            </select>
+                        </div>
+                        <div class="col-md-4">
+                            <label class="yi-label">Çalışma Saati</label>
+                            <input type="time" class="yi-input"
+                                   value="@_editItem.RunTime.ToString("HH:mm")"
+                                   @onchange="e => { if (TimeOnly.TryParse(e.Value?.ToString(), out var t)) _editItem.RunTime = t; }" />
+                        </div>
+                        @if (_editItem.FrequencyType == "Weekly")
+                        {
+                            <div class="col-md-4">
+                                <label class="yi-label">Gün</label>
+                                <select class="yi-select" @bind="_editItem.DayOfWeek">
+                                    <option value="1">Pazartesi</option>
+                                    <option value="2">Salı</option>
+                                    <option value="3">Çarşamba</option>
+                                    <option value="4">Perşembe</option>
+                                    <option value="5">Cuma</option>
+                                    <option value="6">Cumartesi</option>
+                                    <option value="7">Pazar</option>
+                                </select>
+                            </div>
+                        }
+                        @if (_editItem.FrequencyType == "Monthly")
+                        {
+                            <div class="col-md-4">
+                                <label class="yi-label">Ayın Günü (1-28)</label>
+                                <input type="number" min="1" max="28" class="yi-input" @bind="_editItem.DayOfMonth" />
+                            </div>
+                        }
+                        <div class="col-12">
+                            <div class="form-check">
+                                <input class="form-check-input" type="checkbox" id="srActive" @bind="_editItem.IsActive" />
+                                <label class="form-check-label" for="srActive">Aktif</label>
+                            </div>
+                        </div>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_modalError))
+                    {
+                        <div class="yi-alert yi-alert-danger mt-3">@_modalError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="SaveAsync" disabled="@_saving">
+                        @if (_saving)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        }
+                        <span>Kaydet</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _showModal;
+    private bool _saving;
+    private string? _modalError;
+
+    private List<ScheduledReport> _items = [];
+    private List<QueryRecord> _queries = [];
+    private ScheduledReport _editItem = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var res = await ScheduledSvc.ListAsync();
+        _items = res.IsSuccess ? (res.Data ?? []) : [];
+
+        var qRes = await QuerySvc.GetAllQueriesAsync();
+        _queries = qRes.IsSuccess ? (qRes.Data ?? []) : [];
+        _loading = false;
+    }
+
+    private void OpenCreateModal()
+    {
+        _editItem   = new ScheduledReport { RunTime = new TimeOnly(8, 0) };
+        _modalError = null;
+        _showModal  = true;
+    }
+
+    private void OpenEditModal(ScheduledReport item)
+    {
+        _editItem = new ScheduledReport
+        {
+            Id            = item.Id,
+            QueryRecordId = item.QueryRecordId,
+            Title         = item.Title,
+            Channel       = item.Channel,
+            Recipient     = item.Recipient,
+            FrequencyType = item.FrequencyType,
+            RunTime       = item.RunTime,
+            DayOfWeek     = item.DayOfWeek,
+            DayOfMonth    = item.DayOfMonth,
+            IsActive      = item.IsActive
+        };
+        _modalError = null;
+        _showModal  = true;
+    }
+
+    private async Task SaveAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editItem.Title))      { _modalError = "Başlık zorunludur."; return; }
+        if (_editItem.QueryRecordId == 0)                    { _modalError = "Rapor seçiniz."; return; }
+        if (string.IsNullOrWhiteSpace(_editItem.Recipient))  { _modalError = "Alıcı zorunludur."; return; }
+
+        _saving = true;
+        _modalError = null;
+        var userId = SessionSvc.ActiveUser?.UserId ?? 1;
+        var res = await ScheduledSvc.SaveAsync(_editItem, userId);
+        _saving = false;
+        if (res.IsSuccess)
+        {
+            _showModal = false;
+            Toast.ShowSuccess("Zamanlı rapor kaydedildi.");
+            await LoadAsync();
+        }
+        else
+        {
+            _modalError = res.Message ?? "Kayıt başarısız.";
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var userId = SessionSvc.ActiveUser?.UserId ?? 1;
+        var res = await ScheduledSvc.DeleteAsync(id, userId);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Zamanlı rapor silindi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+
+    private static string DayName(int? day) => day switch
+    {
+        1 => "Pzt", 2 => "Sal", 3 => "Çar", 4 => "Per",
+        5 => "Cum", 6 => "Cmt", 7 => "Paz", _ => "?"
+    };
+}

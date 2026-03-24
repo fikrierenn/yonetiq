@@ -1,0 +1,248 @@
+@page "/veri-kaynaklari"
+@inject DataSourceService DataSourceSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+@*
+    Veri Kaynakları Yönetim Sayfası.
+    Kayıtlı tüm veritabanı sunucu bağlantılarını listeler.
+    Yeni kaynak ekleme, düzenleme, test etme ve silme işlemleri yapılabilir.
+*@
+
+<PageTitle>Veri Kaynakları</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-hdd-network"
+          Title="Veri Kaynakları"
+          Subtitle="Raporların çalıştırılacağı veritabanı sunucu bağlantılarını yönetin.">
+    <Actions>
+        <a class="yi-btn-primary" href="/veri-kaynaklari/yeni">
+            <i class="bi bi-plus-circle"></i> Yeni Veri Kaynağı
+        </a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else if (!string.IsNullOrWhiteSpace(_error))
+{
+    <div class="alert alert-danger" role="alert"><i class="bi bi-exclamation-circle me-2"></i>@_error</div>
+}
+else
+{
+    <div class="yi-card">
+        <div class="yi-card-header d-flex justify-content-between align-items-center">
+            <h2 class="yi-card-title">Kayıtlı Sunucular</h2>
+            <span class="yi-badge yi-badge-info">@_sources.Count kaynak</span>
+        </div>
+        <div class="yi-card-body p-0">
+            @if (_sources.Count == 0)
+            {
+                <div class="yi-empty p-4">
+                    <i class="bi bi-hdd-network fs-1 d-block mb-2 opacity-50"></i>
+                    Henüz veri kaynağı eklenmemiş.
+                    <br />
+                    <a class="yi-link mt-2 d-inline-block" href="/veri-kaynaklari/yeni">İlk kaynağı ekleyin →</a>
+                </div>
+            }
+            else
+            {
+                <div class="table-responsive">
+                    <table class="yi-table">
+                        <thead>
+                            <tr>
+                                <th>Ad</th>
+                                <th>Sunucu Tipi</th>
+                                <th>Açıklama</th>
+                                <th>Durum</th>
+                                <th class="text-end">İşlemler</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            @foreach (var src in _sources)
+                            {
+                                <tr>
+                                    <td>
+                                        <div class="d-flex align-items-center gap-2">
+                                            <i class="bi @GetServerIcon(src.ServerType) text-primary"></i>
+                                            <span class="fw-semibold">@src.Name</span>
+                                            @if (src.IsDefault)
+                                            {
+                                                <span class="yi-badge yi-badge-primary">Varsayılan</span>
+                                            }
+                                        </div>
+                                    </td>
+                                    <td>
+                                        <span class="yi-badge @GetServerBadgeClass(src.ServerType)">@src.ServerType</span>
+                                    </td>
+                                    <td class="text-muted small">@(src.Description ?? "—")</td>
+                                    <td>
+                                        @if (src.IsActive)
+                                        {
+                                            <span class="yi-badge yi-badge-success"><i class="bi bi-circle-fill me-1" style="font-size:.5rem"></i>Aktif</span>
+                                        }
+                                        else
+                                        {
+                                            <span class="yi-badge yi-badge-secondary">Pasif</span>
+                                        }
+                                    </td>
+                                    <td class="text-end">
+                                        <div class="d-flex gap-1 justify-content-end">
+                                            <button class="yi-btn yi-btn-ghost yi-btn-sm @GetTestBtnClass(src.Id)"
+                                                    @onclick="() => TestConnectionAsync(src.Id)"
+                                                    title="Bağlantıyı Test Et"
+                                                    disabled="@(_testingId == src.Id)">
+                                                @if (_testingId == src.Id)
+                                                {
+                                                    <span class="yi-nav-spinner me-1" role="status"></span>
+                                                }
+                                                else if (_testResults.TryGetValue(src.Id, out var ok))
+                                                {
+                                                    <i class="bi @(ok ? "bi-check-circle-fill text-success" : "bi-x-circle-fill text-danger")"></i>
+                                                }
+                                                else
+                                                {
+                                                    <i class="bi bi-ethernet"></i>
+                                                }
+                                                Test
+                                            </button>
+                                            <a class="yi-btn yi-btn-ghost yi-btn-sm" href="/veri-kaynaklari/@src.Id" title="Düzenle">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                            @if (!src.IsDefault)
+                                            {
+                                                <button class="yi-btn yi-btn-ghost yi-btn-sm text-danger"
+                                                        @onclick="() => ConfirmDeleteAsync(src)"
+                                                        title="Sil">
+                                                    <i class="bi bi-trash"></i>
+                                                </button>
+                                            }
+                                        </div>
+                                    </td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@* Silme onayı modalı *@
+@if (_deleteTarget is not null)
+{
+    <div class="yi-modal-overlay" @onclick="CancelDelete" role="dialog" aria-modal="true">
+        <div class="yi-modal" @onclick:stopPropagation>
+            <div class="yi-modal-header">
+                <h3 class="yi-modal-title"><i class="bi bi-exclamation-triangle text-danger me-2"></i>Kaynağı Sil</h3>
+            </div>
+            <div class="yi-modal-body">
+                <strong>@_deleteTarget.Name</strong> veri kaynağını silmek istediğinizden emin misiniz?
+                <br /><span class="text-muted small">Bu kaynağı kullanan raporlar varsayılan bağlantıya geçer.</span>
+            </div>
+            <div class="yi-modal-footer">
+                <button class="yi-btn-outline" @onclick="CancelDelete">Vazgeç</button>
+                <button class="yi-btn-danger" @onclick="DeleteConfirmedAsync">Sil</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private string? _error;
+    private List<YonetIQ.Data.Models.DataSource> _sources = [];
+    private YonetIQ.Data.Models.DataSource? _deleteTarget;
+    private int? _testingId;
+    private readonly Dictionary<int, bool> _testResults = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        var res = await DataSourceSvc.GetAllAsync();
+        if (res.IsSuccess) _sources = res.Data ?? [];
+        else _error = res.Message;
+        _loading = false;
+    }
+
+    private async Task TestConnectionAsync(int id)
+    {
+        _testingId = id;
+        _testResults.Remove(id);
+        StateHasChanged();
+
+        try
+        {
+            var dsRes = await DataSourceSvc.GetByIdAsync(id);
+            if (!dsRes.IsSuccess || dsRes.Data is null)
+            {
+                Toast.ShowError("Veri kaynağı bulunamadı.");
+                return;
+            }
+
+            var ds = dsRes.Data;
+            var (success, error) = await DataSourceService.TestConnectionAsync(
+                ds.ServerType, ds.PlainConnectionString ?? "");
+
+            _testResults[id] = success;
+
+            if (success) Toast.ShowSuccess($"{ds.Name}: Bağlantı başarılı ✓");
+            else Toast.ShowError($"{ds.Name}: {error}");
+        }
+        catch (Exception ex)
+        {
+            _testResults[id] = false;
+            Toast.ShowError($"Test hatası: {ex.Message}");
+        }
+        finally
+        {
+            _testingId = null;
+        }
+    }
+
+    private void ConfirmDeleteAsync(YonetIQ.Data.Models.DataSource src) => _deleteTarget = src;
+    private void CancelDelete() => _deleteTarget = null;
+
+    private async Task DeleteConfirmedAsync()
+    {
+        if (_deleteTarget is null) return;
+        var res = await DataSourceSvc.DeleteAsync(_deleteTarget.Id);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess($"{_deleteTarget.Name} silindi.");
+            _deleteTarget = null;
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message ?? "Silme işlemi başarısız.");
+            _deleteTarget = null;
+        }
+    }
+
+    private static string GetServerIcon(string serverType) => serverType.ToUpperInvariant() switch
+    {
+        "POSTGRESQL" or "POSTGRES" or "PG" => "bi-database-fill",
+        "MYSQL" or "MARIADB"               => "bi-database-fill-gear",
+        _                                  => "bi-server"
+    };
+
+    private static string GetServerBadgeClass(string serverType) => serverType.ToUpperInvariant() switch
+    {
+        "POSTGRESQL" or "POSTGRES" or "PG" => "yi-badge-info",
+        "MYSQL" or "MARIADB"               => "yi-badge-warning",
+        _                                  => "yi-badge-primary"
+    };
+
+    private string GetTestBtnClass(int id)
+        => _testResults.TryGetValue(id, out var ok) ? (ok ? "yi-btn-success-ghost" : "yi-btn-danger-ghost") : "";
+}

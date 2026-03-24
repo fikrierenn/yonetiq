@@ -1,0 +1,137 @@
+@page "/set-listesi"
+@inject QuerySetService SetSvc
+@inject IToastService Toast
+
+@* 
+    Sorgu Setleri (Pano/Dashboard) Yönetim Sayfası.
+    Sistemdeki tüm dashboard ve KPI panellerini liste halinde gösterir. 
+    Buradan yeni set oluşturulabilir veya mevcutlar silinebilir/düzenlenebilir.
+*@
+
+<PageTitle>Set Yönetimi</PageTitle>
+
+<PageHero Section="Sorgu Panoları"
+          Icon="bi-layout-text-window"
+          Title="Set Yönetimi"
+          Subtitle="Dashboard, KPI ve rapor setlerini merkezi olarak buradan yönetin.">
+    <Actions>
+        @* Yeni bir set oluşturma sayfasına yönlendirir *@
+        <a class="yi-btn-primary" href="/set/yeni"><i class="bi bi-plus-lg"></i> Yeni Set</a>
+        @* Verileri veritabanından yeniden çeker *@
+        <button type="button" class="yi-btn-outline" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i> Yenile</button>
+    </Actions>
+</PageHero>
+
+<div class="yi-card">
+    <div class="yi-card-body p-4">
+        @if (_loading)
+        {
+            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+        }
+        else if (_sets.Count == 0)
+        {
+            <div class="yi-alert yi-alert-light" role="alert">Henüz tanımlanmış bir sorgu seti bulunamadı.</div>
+        }
+        else
+        {
+            @* Set Listesi Tablosu *@
+            <div class="overflow-x-auto">
+                <table class="yi-table">
+                    <thead>
+                        <tr>
+                            <th>Set Adı</th>
+                            <th>Tip</th>
+                            <th>Menü Durumu</th>
+                            <th class="text-right">İşlemler</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var set in _sets)
+                        {
+                            <tr>
+                                <td class="fw-semibold">@set.Name</td>
+                                <td><span class="yi-badge yi-badge-light">@set.Type</span></td>
+                                <td>
+                                    @if (set.ShowInNavMenu)
+                                    {
+                                        <span class="text-success"><i class="bi bi-check-circle-fill"></i> Menüde</span>
+                                    }
+                                    else
+                                    {
+                                        <span class="text-muted"><i class="bi bi-eye-slash"></i> Gizli</span>
+                                    }
+                                </td>
+                                <td class="text-right">
+                                    <div class="d-inline-flex gap-2">
+                                        @* Setin çalışma halini gör *@
+                                        <a class="yi-btn-outline yi-btn-sm" href="@($"/set/{set.Id}")">
+                                            <i class="bi bi-eye"></i> Görüntüle
+                                        </a>
+                                        @* Set ayarlarını düzenle *@
+                                        <a class="yi-btn-outline-primary yi-btn-sm" href="@($"/set/duzenle/{set.Id}")">
+                                            <i class="bi bi-pencil"></i> Düzenle
+                                        </a>
+                                        @* Seti sistemden sil *@
+                                        <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(set.Id)">
+                                            <i class="bi bi-trash"></i> Sil
+                                        </button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private bool _loading = true;
+    private List<QuerySet> _sets = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Sayfa yüklendiğinde set listesini çek
+        await LoadAsync();
+    }
+
+    /// <summary>
+    /// Servis üzerinden tüm setleri asenkron olarak çeker.
+    /// </summary>
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await SetSvc.GetAllAsync();
+        if (result.IsSuccess)
+        {
+            _sets = result.Data ?? [];
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Belirtilen seti siler ve listeyi günceller.
+    /// </summary>
+    private async Task DeleteAsync(int id)
+    {
+        var result = await SetSvc.DeleteAsync(id);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Sorgu seti başarıyla silindi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+}
+
+
+
+

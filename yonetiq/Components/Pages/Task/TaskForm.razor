@@ -1,0 +1,773 @@
+@page "/gorev/yeni"
+@page "/gorev/duzenle/{Id:int}"
+@inject TaskService TaskSvc
+@inject UserService UserSvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+@inject MeetingService MeetingSvc
+@inject NavigationManager Nav
+@inject TaskCommentService CommentSvc
+@inject SessionService SessionSvc
+@inject TimeTrackingService TimeSvc
+@using YonetIQ.Components.Shared.AI
+
+<!-- 
+    Gorev Olusturma ve Duzenleme Formu (Task Form).
+    Kullanicilara is atamak, oncelik belirlemek ve teslim tarihlerini yonetmek icin kullanilir.
+    AI destekli duzenleme onerileri sunar.
+-->
+
+<PageTitle>Görev Formu</PageTitle>
+
+<PageHero Section="Görev Modülü"
+          Icon="bi-pencil-square"
+          Title="@FormTitle"
+          Subtitle="Atama, öncelik ve takvim bağlantılarını yönetin.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <a class="yi-btn-outline" href="/gorevler">Görev Listesi</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="yi-alert yi-alert-warning" role="alert">@_errorMessage</div>
+    }
+
+    @if (IsCompletedLock)
+    {
+        <div class="yi-alert yi-alert-info" role="alert">Bu görev tamamlandı durumunda olduğu için salt okunur. Düzenlemek için önce durumu "Devam" veya "Bekliyor" yapın.</div>
+    }
+
+    <div class="row g-4">
+        <div class="@(_model.Id > 0 ? "col-lg-8" : "col-12")">
+            <div class="yi-card">
+                <div class="yi-card-header"><h2 class="yi-card-title">Görev Bilgileri</h2></div>
+                <div class="yi-card-body p-4">
+                    <div class="row g-3">
+                        @if (_sourceMeetingId.HasValue)
+                        {
+                            <div class="col-12">
+                                <div class="yi-alert yi-alert-info d-flex align-items-center gap-2 mb-0">
+                                    <i class="bi bi-link-45deg fs-4"></i>
+                                    <div>
+                                        Bu görev şu <a href="@($"/toplanti/{_sourceMeetingId}#decision-{_model.SourceEntityId}")" class="yi-link fw-bold">toplantı kararından</a> oluşturulmuştur:
+                                        <div class="mt-1 p-2 bg-white bg-opacity-50 rounded small italic">
+                                            "@(_sourceDecision?.Content ?? "Karar içeriği yükleniyor...")"
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+
+                        <div class="col-12">
+                            <label class="yi-label">Başlık</label>
+                            <input class="yi-input" @bind="_model.Title" disabled="@IsCompletedLock" />
+                        </div>
+
+                        <div class="col-12">
+                            <label class="yi-label">Açıklama</label>
+                            <textarea class="yi-input" rows="4" @bind="_model.Description" disabled="@IsCompletedLock"></textarea>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">Atanan Kullanıcı</label>
+                            <select class="yi-select" value="@AssigneeSelection" @onchange="OnAssigneeChangedAsync" disabled="@IsCompletedLock">
+                                <option value="">Kullanıcı seçme (serbest metin)</option>
+                                @foreach (var user in _users)
+                                {
+                                    <option value="@user.Id">@user.FullName</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">Serbest Atanan</label>
+                            <input class="yi-input" @bind="_model.AssigneeName" disabled="@(_model.AssigneeId.HasValue || IsCompletedLock)" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="yi-label">Atanma Tarihi</label>
+                            <input type="date" class="yi-input" value="@AssignedAtInput" @onchange="OnAssignedAtChangedAsync" disabled="@IsCompletedLock" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="yi-label">Bitiş Tarihi</label>
+                            <input type="date" class="yi-input" value="@DueDateInput" @onchange="OnDueDateChangedAsync" disabled="@IsCompletedLock" />
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="yi-label">Öncelik</label>
+                            <select class="yi-select" @bind="_model.PriorityLookupId" disabled="@IsCompletedLock">
+                                <option value="0">Seçiniz...</option>
+                                @foreach (var p in _priorities)
+                                {
+                                    <option value="@p.Id">@p.Value</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12 col-md-4">
+                            <label class="yi-label">Durum</label>
+                            <select class="yi-select" @bind="_model.StatusLookupId">
+                                <option value="0">Seçiniz...</option>
+                                @foreach (var s in _statuses)
+                                {
+                                    <option value="@s.Id">@s.Value</option>
+                                }
+                            </select>
+                        </div>
+
+                        <div class="col-12 d-flex gap-2">
+                            <button type="button" class="yi-btn-primary" @onclick="SaveAsync" disabled="@IsCompletedLock">@SaveButtonText</button>
+                            <a class="yi-btn-outline" href="/gorevler">İptal</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        @if (_model.Id > 0)
+        {
+            <div class="col-lg-4">
+                <div class="yi-card">
+                    <div class="yi-card-body">
+                         <AttachmentManager EntityType="Task" EntityId="@_model.Id" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+
+    @* ─── Yorum & Aktivite Akışı (sadece mevcut görevler için) ─── *@
+    @if (_model.Id > 0)
+    {
+        <div class="row g-4 mt-1">
+            @* Yorumlar *@
+            <div class="col-lg-7">
+                <div class="yi-card">
+                    <div class="yi-card-header">
+                        <h2 class="yi-card-title"><i class="bi bi-chat-left-text me-2"></i>Yorumlar</h2>
+                    </div>
+                    <div class="yi-card-body p-4">
+                        @if (_commentsLoading)
+                        {
+                            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+                        }
+                        else if (_comments.Count == 0)
+                        {
+                            <div class="yi-empty small">Henüz yorum yapılmamış.</div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-column gap-3">
+                                @foreach (var cmt in _comments)
+                                {
+                                    <div class="d-flex gap-3 align-items-start">
+                                        <div class="rounded-circle d-flex align-items-center justify-content-center flex-shrink-0"
+                                             style="width:36px;height:36px;background:var(--yi-bg-soft);border:1px solid var(--yi-card-border)">
+                                            <i class="bi bi-person" style="color:var(--yi-text-muted)"></i>
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="d-flex justify-content-between align-items-center mb-1">
+                                                <span class="fw-semibold small" style="color:var(--yi-text-main)">@cmt.UserName</span>
+                                                <span class="small" style="color:var(--yi-text-muted)">@cmt.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")</span>
+                                            </div>
+                                            <div class="p-2 rounded" style="background:var(--yi-bg-soft);border:1px solid var(--yi-card-border);color:var(--yi-text-main);font-size:.9em">
+                                                @cmt.Content
+                                            </div>
+                                            @if (SessionSvc.ActiveUser?.UserId == cmt.UserId)
+                                            {
+                                                <button type="button" class="btn btn-link btn-sm p-0 mt-1"
+                                                        style="color:var(--yi-text-muted);font-size:.8em"
+                                                        @onclick="() => DeleteCommentAsync(cmt.Id)">
+                                                    <i class="bi bi-trash3"></i> Sil
+                                                </button>
+                                            }
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+
+                        @* Yorum Ekleme Formu *@
+                        <div class="mt-4">
+                            <label class="yi-label">Yorum Ekle</label>
+                            <textarea class="yi-input" rows="3" @bind="_newCommentContent" placeholder="Yorumunuzu yazın..."></textarea>
+                            <button type="button" class="yi-btn-primary yi-btn-sm mt-2" @onclick="AddCommentAsync" disabled="@_commentSending">
+                                @if (_commentSending)
+                                {
+                                    <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                }
+                                else
+                                {
+                                    <i class="bi bi-send me-1"></i>
+                                }
+                                Gönder
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            @* Aktivite Akışı *@
+            <div class="col-lg-5">
+                <div class="yi-card">
+                    <div class="yi-card-header">
+                        <h2 class="yi-card-title"><i class="bi bi-clock-history me-2"></i>Aktivite Akışı</h2>
+                    </div>
+                    <div class="yi-card-body p-4">
+                        @if (_activityLoading)
+                        {
+                            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+                        }
+                        else if (_activities.Count == 0)
+                        {
+                            <div class="yi-empty small">Henüz aktivite kaydı yok.</div>
+                        }
+                        else
+                        {
+                            <div class="d-flex flex-column gap-2">
+                                @foreach (var act in _activities)
+                                {
+                                    <div class="d-flex gap-2 align-items-start">
+                                        <div class="mt-1 flex-shrink-0" style="color:var(--yi-text-muted)">
+                                            @switch (act.ActionType)
+                                            {
+                                                case "StatusChange":
+                                                    <i class="bi bi-arrow-left-right"></i>
+                                                    break;
+                                                case "AssigneeChange":
+                                                    <i class="bi bi-person-check"></i>
+                                                    break;
+                                                case "Created":
+                                                    <i class="bi bi-plus-circle"></i>
+                                                    break;
+                                                case "Updated":
+                                                    <i class="bi bi-pencil"></i>
+                                                    break;
+                                                default:
+                                                    <i class="bi bi-dot"></i>
+                                                    break;
+                                            }
+                                        </div>
+                                        <div class="flex-grow-1">
+                                            <div class="small" style="color:var(--yi-text-main)">
+                                                <span class="fw-semibold">@act.UserName</span>
+                                                @if (!string.IsNullOrWhiteSpace(act.OldValue) && !string.IsNullOrWhiteSpace(act.NewValue))
+                                                {
+                                                    <span> — <span style="color:var(--yi-text-muted)">@act.OldValue</span> → <span style="color:var(--yi-text-link)">@act.NewValue</span></span>
+                                                }
+                                                else if (!string.IsNullOrWhiteSpace(act.Note))
+                                                {
+                                                    <span style="color:var(--yi-text-muted)"> @act.Note</span>
+                                                }
+                                            </div>
+                                            <div style="font-size:.78em;color:var(--yi-text-muted)">
+                                                @act.ActionType — @act.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm")
+                                            </div>
+                                        </div>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        @* ─── Zaman Takibi ─── *@
+        <div class="row g-4 mt-1">
+            <div class="col-12">
+                <div class="yi-card">
+                    <div class="yi-card-header d-flex justify-content-between align-items-center">
+                        <h2 class="yi-card-title mb-0"><i class="bi bi-stopwatch me-2"></i>Zaman Takibi</h2>
+                        @if (_totalMinutes > 0)
+                        {
+                            <span class="small" style="color:var(--yi-text-muted)">
+                                Toplam Efor: <b style="color:var(--yi-text-main)">@(_totalMinutes / 60)s @(_totalMinutes % 60)dk</b>
+                            </span>
+                        }
+                    </div>
+                    <div class="yi-card-body p-4">
+                        @if (_timeLoading)
+                        {
+                            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+                        }
+                        else
+                        {
+                            @* Timer kontrolü *@
+                            <div class="d-flex flex-wrap align-items-center gap-3 mb-4">
+                                @if (_runningTimer is not null)
+                                {
+                                    <div class="d-flex align-items-center gap-2 p-2 rounded" style="background:rgba(227,30,36,.08);border:1px solid rgba(227,30,36,.2)">
+                                        <i class="bi bi-circle-fill" style="color:var(--yi-primary);font-size:.6em;animation:pulse 1.2s infinite"></i>
+                                        <span class="small fw-semibold" style="color:var(--yi-text-main)">
+                                            Timer çalışıyor — @((int)(DateTime.UtcNow - _runningTimer.StartedAt).TotalMinutes) dk geçti
+                                        </span>
+                                    </div>
+                                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="StopTimerAsync">
+                                        <i class="bi bi-stop-fill me-1"></i>Durdur
+                                    </button>
+                                }
+                                else
+                                {
+                                    <button type="button" class="yi-btn-primary yi-btn-sm" @onclick="StartTimerAsync">
+                                        <i class="bi bi-play-fill me-1"></i>Timer Başlat
+                                    </button>
+                                }
+                                <a href="/gorevler/efor-raporu" class="small" style="color:var(--yi-text-link)">
+                                    <i class="bi bi-box-arrow-up-right me-1"></i>Efor Raporu
+                                </a>
+                            </div>
+
+                            @* Son kayıtlar *@
+                            @if (_timeEntries.Count > 0)
+                            {
+                                <div class="mb-4">
+                                    <div class="yi-label mb-2">Son Zaman Kayıtları</div>
+                                    <div class="d-flex flex-column gap-2">
+                                        @foreach (var te in _timeEntries.Take(5))
+                                        {
+                                            <div class="d-flex justify-content-between align-items-center p-2 rounded" style="background:var(--yi-bg-soft);border:1px solid var(--yi-card-border)">
+                                                <div>
+                                                    <span class="small fw-semibold" style="color:var(--yi-text-main)">@te.UserName</span>
+                                                    <span class="small ms-2" style="color:var(--yi-text-muted)">
+                                                        @te.StartedAt.ToLocalTime().ToString("dd.MM.yy HH:mm")
+                                                        @if (te.EndedAt.HasValue)
+                                                        {
+                                                            <text> → @te.EndedAt.Value.ToLocalTime().ToString("HH:mm")</text>
+                                                        }
+                                                    </span>
+                                                    @if (!string.IsNullOrWhiteSpace(te.Note))
+                                                    {
+                                                        <div class="small" style="color:var(--yi-text-muted)">@te.Note</div>
+                                                    }
+                                                </div>
+                                                <div class="d-flex align-items-center gap-2">
+                                                    <span class="small fw-semibold" style="color:var(--yi-text-main)">@te.DurationDisplay</span>
+                                                    @if (SessionSvc.ActiveUser?.UserId == te.UserId)
+                                                    {
+                                                        <button type="button" class="btn btn-link btn-sm p-0" style="color:var(--yi-text-muted);font-size:.8em" @onclick="() => DeleteTimeEntryAsync(te.Id)">
+                                                            <i class="bi bi-trash3"></i>
+                                                        </button>
+                                                    }
+                                                </div>
+                                            </div>
+                                        }
+                                    </div>
+                                </div>
+                            }
+
+                            @* Manuel giriş formu *@
+                            <div>
+                                <div class="yi-label mb-2">Manuel Süre Ekle</div>
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="yi-label small">Başlangıç</label>
+                                        <input type="datetime-local" class="yi-input" @bind="_manualStart" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="yi-label small">Bitiş</label>
+                                        <input type="datetime-local" class="yi-input" @bind="_manualEnd" />
+                                    </div>
+                                    <div class="col-md-4">
+                                        <label class="yi-label small">Not (isteğe bağlı)</label>
+                                        <input type="text" class="yi-input" @bind="_manualNote" placeholder="Açıklama..." />
+                                    </div>
+                                    <div class="col-12">
+                                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="AddManualEntryAsync">
+                                            <i class="bi bi-plus-circle me-1"></i>Ekle
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+<AiSidebar @ref="_aiSidebar" Module="task" Parameters="@_aiParams" />
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["taskId"] = Id ?? 0
+    };
+
+    private void ToggleAiSidebar()
+    {
+        _aiSidebar?.Toggle();
+    }
+
+    private bool _loading = true;
+    private string? _errorMessage;
+    private int? _sourceMeetingId;
+    private Decision? _sourceDecision;
+    private int? _initialStatusId;
+    private List<User> _users = [];
+    private List<Lookup> _priorities = [];
+    private List<Lookup> _statuses = [];
+
+    // ── Yorum & Aktivite ─────────────────────────────────────────────────
+    private List<TaskComment>  _comments        = [];
+    private List<TaskActivity> _activities      = [];
+    private bool               _commentsLoading = false;
+    private bool               _activityLoading = false;
+    private bool               _commentSending  = false;
+    private string             _newCommentContent = string.Empty;
+
+    // ── Zaman Takibi ──────────────────────────────────────────────────────
+    private List<TimeEntry> _timeEntries  = [];
+    private TimeEntry?      _runningTimer;
+    private bool            _timeLoading  = false;
+    private int             _totalMinutes;
+    private DateTime        _manualStart  = DateTime.Now.AddHours(-1);
+    private DateTime        _manualEnd    = DateTime.Now;
+    private string          _manualNote   = string.Empty;
+
+    private string FormTitle => _model.Id == 0 ? "Yeni Görev" : "Görev Düzenle";
+    private bool IsCompletedLock => _model.Id > 0 && _model.StatusLookupId == 10;
+    private string SaveButtonText => _model.Id == 0 ? "Görev Oluştur" : "Güncellemeleri Kaydet";
+
+    private TaskItem _model = new()
+    {
+        AssignedAt = DateTime.Today,
+        PriorityLookupId = 0,
+        StatusLookupId = 0
+    };
+
+    private string? AssigneeSelection => _model.AssigneeId?.ToString();
+
+    private string AssignedAtInput
+    {
+        get => _model.AssignedAt.ToString("yyyy-MM-dd");
+        set
+        {
+            if (DateTime.TryParse(value, out var parsed))
+            {
+                _model.AssignedAt = parsed.Date;
+            }
+        }
+    }
+
+    private string DueDateInput
+    {
+        get => _model.DueDate?.ToString("yyyy-MM-dd") ?? string.Empty;
+        set
+        {
+            if (DateTime.TryParse(value, out var parsed))
+            {
+                _model.DueDate = parsed.Date;
+            }
+            else
+            {
+                _model.DueDate = null;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var userRes = await UserSvc.GetAllAsync();
+        _users = userRes.Data ?? [];
+        _priorities = await LookupSvc.ListByGroupAsync("TaskPriority");
+        _statuses = await LookupSvc.ListByGroupAsync("TaskStatus");
+
+        if (Id.HasValue)
+        {
+            var result = await TaskSvc.GetAsync(Id.Value);
+            if (result.IsSuccess && result.Data is not null)
+            {
+                _model = result.Data;
+                
+                if (_model.SourceEntityType == "Decision" && _model.SourceEntityId.HasValue)
+                {
+                    // Kararın bağlı olduğu toplantıyı standart ServiceResult yapısı üzerinden çözüyoruz.
+                    // Böylece hem hata mesajı hem de veri tek bir ortak akıştan yönetilmiş oluyor.
+                    var meetingIdResult = await MeetingSvc.GetMeetingIdByDecisionIdAsync(_model.SourceEntityId.Value);
+                    if (meetingIdResult.IsSuccess)
+                    {
+                        _sourceMeetingId = meetingIdResult.Data;
+                    }
+
+                    var decisionRes = await MeetingSvc.GetDecisionByIdAsync(_model.SourceEntityId.Value);
+                    if (decisionRes.IsSuccess)
+                    {
+                        _sourceDecision = decisionRes.Data;
+                    }
+                }
+            }
+            else if (!result.IsSuccess)
+            {
+                _errorMessage = result.Message;
+            }
+        }
+
+        _initialStatusId = _model.StatusLookupId;
+        _loading = false;
+
+        if (_model.Id > 0)
+        {
+            await LoadCommentsAndActivityAsync();
+            await LoadTimeEntriesAsync();
+        }
+    }
+
+    private async Task LoadCommentsAndActivityAsync()
+    {
+        _commentsLoading = true;
+        _activityLoading = true;
+
+        var commentRes  = await CommentSvc.GetCommentsAsync(_model.Id);
+        var activityRes = await CommentSvc.GetActivityAsync(_model.Id);
+
+        _comments   = commentRes.IsSuccess  ? (commentRes.Data  ?? []) : [];
+        _activities = activityRes.IsSuccess ? (activityRes.Data ?? []) : [];
+
+        _commentsLoading = false;
+        _activityLoading = false;
+    }
+
+    private async Task AddCommentAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_newCommentContent)) return;
+        var user = SessionSvc.ActiveUser;
+        if (user is null) return;
+
+        _commentSending = true;
+        var result = await CommentSvc.AddCommentAsync(_model.Id, user.UserId, user.FullName, _newCommentContent.Trim());
+        if (result.IsSuccess)
+        {
+            _newCommentContent = string.Empty;
+            Toast.ShowSuccess("Yorum eklendi.");
+            await LoadCommentsAndActivityAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+        _commentSending = false;
+    }
+
+    private async Task DeleteCommentAsync(int commentId)
+    {
+        var user = SessionSvc.ActiveUser;
+        if (user is null) return;
+
+        var result = await CommentSvc.DeleteCommentAsync(commentId, user.UserId);
+        if (result.IsSuccess && result.Data)
+        {
+            Toast.ShowSuccess("Yorum silindi.");
+            await LoadCommentsAndActivityAsync();
+        }
+        else
+        {
+            Toast.ShowError("Yorum silinemedi veya yetkiniz yok.");
+        }
+    }
+
+    private async Task OnAssigneeChangedAsync(ChangeEventArgs e)
+    {
+        var value = e.Value?.ToString();
+
+        if (int.TryParse(value, out var id))
+        {
+            _model.AssigneeId = id;
+            var selected = _users.FirstOrDefault(x => x.Id == id);
+            if (selected is not null)
+            {
+                _model.AssigneeName = selected.FullName;
+            }
+        }
+        else
+        {
+            _model.AssigneeId = null;
+        }
+
+        await Task.CompletedTask;
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_model.Title))
+        {
+            _errorMessage = "Başlık zorunludur.";
+            return;
+        }
+
+        if (!_model.AssigneeId.HasValue && string.IsNullOrWhiteSpace(_model.AssigneeName))
+        {
+            _errorMessage = "Atanan kullanıcı veya serbest metin zorunludur.";
+            return;
+        }
+
+        try
+        {
+            var result = await TaskSvc.SaveAsync(_model);
+            if (result.IsSuccess)
+            {
+                Toast.ShowSuccess("Görev kaydedildi.");
+                Nav.NavigateTo("/gorevler");
+            }
+            else
+            {
+                _errorMessage = result.Message;
+                Toast.ShowError(result.Message);
+            }
+        }
+        catch (Exception)
+        {
+            _errorMessage = "Görev kaydedilirken beklenmedik bir hata oluştu.";
+            Toast.ShowError(_errorMessage);
+        }
+    }
+
+    private Task OnAssignedAtChangedAsync(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            _model.AssignedAt = parsed.Date;
+        }
+        return Task.CompletedTask;
+    }
+
+    private Task OnDueDateChangedAsync(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            _model.DueDate = parsed.Date;
+        }
+        else
+        {
+            _model.DueDate = null;
+        }
+        return Task.CompletedTask;
+    }
+
+    // ── Zaman Takibi Metodları ────────────────────────────────────────────
+    private async Task LoadTimeEntriesAsync()
+    {
+        _timeLoading = true;
+        var user = SessionSvc.ActiveUser;
+
+        var entriesRes = await TimeSvc.GetByTaskAsync(_model.Id);
+        _timeEntries = entriesRes.IsSuccess ? (entriesRes.Data ?? []) : [];
+
+        if (user is not null)
+        {
+            var runningRes = await TimeSvc.GetRunningTimerAsync(_model.Id, user.UserId);
+            _runningTimer = runningRes.IsSuccess ? runningRes.Data : null;
+        }
+
+        var totalRes = await TimeSvc.GetTotalMinutesAsync(_model.Id);
+        _totalMinutes = totalRes.IsSuccess ? totalRes.Data : 0;
+
+        _timeLoading = false;
+    }
+
+    private async Task StartTimerAsync()
+    {
+        var user = SessionSvc.ActiveUser;
+        if (user is null) return;
+
+        var res = await TimeSvc.StartTimerAsync(_model.Id, user.UserId, user.FullName);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Timer başlatıldı.");
+            await LoadTimeEntriesAsync();
+        }
+        else
+        {
+            Toast.ShowWarning(res.Message);
+        }
+    }
+
+    private async Task StopTimerAsync()
+    {
+        if (_runningTimer is null) return;
+
+        var res = await TimeSvc.StopTimerAsync(_runningTimer.Id, null);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess($"Timer durduruldu. Süre: {res.Data?.DurationDisplay}");
+            await LoadTimeEntriesAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+
+    private async Task AddManualEntryAsync()
+    {
+        var user = SessionSvc.ActiveUser;
+        if (user is null) return;
+
+        var startUtc = _manualStart.ToUniversalTime();
+        var endUtc   = _manualEnd.ToUniversalTime();
+
+        var res = await TimeSvc.AddManualAsync(_model.Id, user.UserId, user.FullName, startUtc, endUtc, _manualNote);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Zaman kaydı eklendi.");
+            _manualNote = string.Empty;
+            _manualStart = DateTime.Now.AddHours(-1);
+            _manualEnd   = DateTime.Now;
+            await LoadTimeEntriesAsync();
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+
+    private async Task DeleteTimeEntryAsync(int entryId)
+    {
+        var user = SessionSvc.ActiveUser;
+        if (user is null) return;
+
+        var res = await TimeSvc.DeleteAsync(entryId, user.UserId);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Kayıt silindi.");
+            await LoadTimeEntriesAsync();
+        }
+        else
+        {
+            Toast.ShowError("Kayıt silinemedi.");
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,46 @@
+@* AI SQL Asistanı: Doğal dil isteği girişi, üret butonu ve taslak SQL gösterimi. *@
+<div class="col-12">
+    <label class="yi-label"><i class="bi bi-robot"></i> AI SQL Asistanı</label>
+    <div class="row g-2">
+        <div class="col-12 col-lg-9">
+            <input class="yi-input"
+                   placeholder="Örnek: Son 6 ayda departman bazlı bekleyen karar sayısı"
+                   value="@RequestText"
+                   @oninput="OnRequestChanged" />
+        </div>
+        <div class="col-12 col-lg-3">
+            <button type="button"
+                    class="yi-btn-outline w-100"
+                    @onclick="HandleGenerateClick"
+                    disabled="@(Generating || string.IsNullOrWhiteSpace(RequestText))">
+                @(Generating ? "Üretiliyor..." : "AI SQL Üret")
+            </button>
+        </div>
+    </div>
+    <div class="yi-muted-xs mt-1">AI, mevcut tablo şemasını kullanarak SQL taslağı oluşturur.</div>
+</div>
+
+@if (!string.IsNullOrWhiteSpace(DraftSql))
+{
+    <div class="col-12">
+        <div class="yi-alert yi-alert-secondary">
+            <div class="fw-semibold mb-1">AI SQL Taslağı</div>
+            <pre class="yi-pre">@DraftSql</pre>
+        </div>
+    </div>
+}
+
+@code {
+    [Parameter] public string RequestText { get; set; } = string.Empty;
+    [Parameter] public EventCallback<string> RequestTextChanged { get; set; }
+    [Parameter] public bool Generating { get; set; }
+    [Parameter] public string? DraftSql { get; set; }
+    [Parameter] public EventCallback OnGenerate { get; set; }
+
+    private async Task HandleGenerateClick() => await OnGenerate.InvokeAsync();
+
+    private async Task OnRequestChanged(ChangeEventArgs e)
+    {
+        await RequestTextChanged.InvokeAsync(e.Value?.ToString() ?? string.Empty);
+    }
+}

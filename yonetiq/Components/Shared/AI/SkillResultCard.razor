@@ -1,0 +1,78 @@
+@* AI skill ciktisini gosteren kart *@
+@using System.Web
+@using YonetIQ.Data.Models.AI
+
+@if (Response is not null)
+{
+    <div class="yi-card yi-ai-result-card mb-3">
+        <div class="yi-card-header d-flex justify-content-between align-items-center">
+            <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-stars yi-ai-icon"></i>
+                <span class="fw-semibold">@Response.SkillName</span>
+            </div>
+            <div class="d-flex align-items-center gap-2">
+                <ConfidenceBadge Confidence="@Response.Confidence" />
+                @if (Response.LatencyMs > 0)
+                {
+                    <span class="text-muted small">@(Response.LatencyMs)ms</span>
+                }
+            </div>
+        </div>
+        <div class="yi-card-body">
+            @if (Response.IsSuccess)
+            {
+                <div class="yi-ai-content">
+                    @((MarkupString)FormatContent(Response.Content))
+                </div>
+
+                @if (Response.Actions.Count > 0)
+                {
+                    <div class="yi-ai-actions mt-3 d-flex gap-2 flex-wrap">
+                        @foreach (var act in Response.Actions)
+                        {
+                            <button class="btn btn-sm yi-btn-outline" @onclick="() => OnActionClick.InvokeAsync(act)">
+                                <i class="bi @act.Icon"></i> @act.Label
+                            </button>
+                        }
+                    </div>
+                }
+
+                @if (Response.InteractionId.HasValue)
+                {
+                    <AiFeedbackWidget InteractionId="@Response.InteractionId.Value" UserId="@UserId" />
+                }
+            }
+            else
+            {
+                <div class="alert yi-alert-warning mb-0">
+                    <i class="bi bi-exclamation-triangle"></i> @Response.ErrorMessage
+                </div>
+            }
+        </div>
+        @if (Response.ContextExplanation is not null)
+        {
+            <div class="yi-card-footer small text-muted">
+                <i class="bi bi-info-circle"></i> @Response.ContextExplanation
+            </div>
+        }
+    </div>
+}
+
+@code {
+    [Parameter] public AiResponse? Response { get; set; }
+    [Parameter] public int UserId { get; set; }
+    [Parameter] public EventCallback<SuggestedAction> OnActionClick { get; set; }
+
+    private static string FormatContent(string content)
+    {
+        if (string.IsNullOrWhiteSpace(content))
+            return string.Empty;
+
+        // HTML encode first to prevent XSS, then apply safe formatting
+        var safe = HttpUtility.HtmlEncode(content);
+        return safe
+            .Replace("\n\n", "</p><p>")
+            .Replace("\n", "<br/>")
+            .Insert(0, "<p>") + "</p>";
+    }
+}

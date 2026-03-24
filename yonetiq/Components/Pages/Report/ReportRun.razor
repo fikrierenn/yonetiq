@@ -1,0 +1,685 @@
+@page "/raporlar/calistir/{Id:int}"
+@using YonetIQ.Components.Shared.AI
+@inject ReportingService ReportSvc
+@inject QueryService QuerySvc
+@inject IToastService Toast
+@inject EmailService EmailSvc
+@inject TelegramService TelegramSvc
+@inject SessionService SessionSvc
+@inject ExportService ExportSvc
+@inject IJSRuntime JS
+
+@*
+    Rapor Çalıştırma ve Sonuç Sayfası.
+    Seçilen raporun SQL sorgusunu sunucuda koşturur ve sonuçları
+    dinamik tablo veya grafik olarak ekrana basar.
+    Parametreli sorgular için tip-aware form otomatik gösterilir.
+*@
+
+<PageTitle>Rapor Çalıştır</PageTitle>
+
+<PageHero Section="Raporlama"
+          Icon="bi-play-circle"
+          Title="Rapor Çalıştır"
+          Subtitle="Sorgu sonuçlarını gerçek zamanlı analiz edin ve çıktıları inceleyin.">
+    <Actions>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+            <i class="bi bi-stars"></i> AI Asistan
+        </button>
+        <a class="yi-btn-primary" href="/raporlar">Rapor Listesi</a>
+        <a class="yi-btn-outline" href="@($"/sorgu/{Id}")">Sorguyu Düzenle</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yukleniyor"></div>
+}
+else if (_model.SelectedReport is null)
+{
+    <div class="yi-alert yi-alert-warning">Seçilen rapor bulunamadı veya silinmiş olabilir.</div>
+}
+else
+{
+    @* Rapor Bilgi ve Kontrol Paneli *@
+    <div class="yi-card mb-3">
+        <div class="yi-card-body p-4">
+            <div class="d-flex flex-wrap align-items-start justify-content-between gap-3">
+                <div>
+                    <h2 class="yi-card-title">@_model.SelectedReport.Name</h2>
+                    <p class="yi-muted mt-1 mb-0">@_model.SelectedReport.Description</p>
+                    <div class="yi-muted-subtle mt-2 small">Görünüm Tipi: @_model.SelectedReport.ResultType</div>
+                </div>
+                @* Görünüm Modu Seçicileri *@
+                <div class="d-flex flex-wrap gap-2">
+                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick='() => ChangeViewMode("")'>Normal</button>
+                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick='() => ChangeViewMode("wide")'>Geniş</button>
+                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick='() => ChangeViewMode("table")'>Tablo Odaklı</button>
+                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick='() => ChangeViewMode("full")'>Tam Ekran</button>
+                </div>
+            </div>
+
+            <div class="mt-4 row g-3 align-items-end">
+                <div class="col-12 col-lg-8">
+                    <label class="yi-label">Sonuç İçinde Hızlı Ara</label>
+                    <input class="yi-input" @bind="_model.ResultSearch" @bind:event="oninput" placeholder="Satırlardaki herhangi bir veriyi yazın..." />
+                </div>
+                <div class="col-12 col-lg-4 d-flex gap-2">
+                    <button type="button" class="yi-btn-primary flex-fill" @onclick="OnRunButtonClickAsync" disabled="@_running">
+                        @(_running ? "Çalışıyor..." : "Raporu Yeniden Çalıştır")
+                    </button>
+                    <button type="button" class="yi-btn-outline" @onclick="ApplyResultFilter">Filtrele</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    @* Hata Mesajı *@
+    @if (!string.IsNullOrWhiteSpace(_model.Error))
+    {
+        <div class="yi-alert yi-alert-danger">@_model.Error</div>
+    }
+
+    @* Çalışma İstatistikleri *@
+    @if (_model.RawResult is not null && _model.Success)
+    {
+        <div class="yi-alert yi-alert-info py-2 small">
+            <i class="bi bi-info-circle"></i> Gösterilen: <b>@_model.DisplayedRowCount</b> / <b>@_model.RawRowCount</b> satır |
+            Çalışma Süresi: <b>@_model.ExecutionTimeMs</b> ms
+        </div>
+    }
+
+    @* ─── Parametre Modalı ─── *@
+    @if (_showParamModal && _paramInfos.Count > 0)
+    {
+        <div class="modal-backdrop fade show" style="z-index:1040"></div>
+        <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="paramModalTitle">
+            <div class="modal-dialog modal-dialog-centered modal-lg">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="paramModalTitle">
+                            <i class="bi bi-sliders me-2"></i>Rapor Parametreleri
+                        </h5>
+                        <button type="button" class="btn-close" @onclick='() => _showParamModal = false' aria-label="Kapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="yi-muted small mb-3">Bu rapor çalıştırılmadan önce aşağıdaki değerleri girin.</p>
+                        <div class="row g-3">
+                            @foreach (var pi in _paramInfos)
+                            {
+                                <div class="col-12 col-md-6">
+                                    <label class="yi-label">@pi.Name
+                                        @if (!string.IsNullOrWhiteSpace(pi.SqlType))
+                                        {
+                                            <span class="yi-badge yi-badge-light ms-1" style="font-size:.7em">@pi.SqlType</span>
+                                        }
+                                    </label>
+
+                                    @if (pi.InputType == "select")
+                                    {
+                                        <select class="yi-select" value="@pi.Value"
+                                                @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty">
+                                            @foreach (var opt in pi.Options)
+                                            {
+                                                <option value="@opt">@opt</option>
+                                            }
+                                        </select>
+                                    }
+                                    else if (pi.InputType == "yesno")
+                                    {
+                                        <select class="yi-select" value="@pi.Value"
+                                                @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty">
+                                            <option value="1">Evet</option>
+                                            <option value="0">Hayır</option>
+                                        </select>
+                                    }
+                                    else if (pi.InputType == "date")
+                                    {
+                                        <input type="date" class="yi-input" value="@pi.Value"
+                                               @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty" />
+                                    }
+                                    else if (pi.InputType == "datetime")
+                                    {
+                                        <input type="datetime-local" class="yi-input" value="@pi.Value"
+                                               @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty" />
+                                    }
+                                    else if (pi.InputType == "number")
+                                    {
+                                        <input type="number" step="1" class="yi-input" value="@pi.Value"
+                                               @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty" />
+                                    }
+                                    else if (pi.InputType == "number-decimal")
+                                    {
+                                        <input type="number" step="any" class="yi-input" value="@pi.Value"
+                                               @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty" />
+                                    }
+                                    else
+                                    {
+                                        <input type="text" class="yi-input" value="@pi.Value"
+                                               @onchange="e => pi.Value = e.Value?.ToString() ?? string.Empty" />
+                                    }
+
+                                    @if (!string.IsNullOrWhiteSpace(pi.DefaultValue))
+                                    {
+                                        <div class="yi-form-hint mt-1 small">Varsayılan: <code>@pi.DefaultValue</code></div>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="yi-btn-outline" @onclick='() => _showParamModal = false'>İptal</button>
+                        <button type="button" class="yi-btn-primary" @onclick="RunFromParamModalAsync" disabled="@_running">
+                            @if (_running)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Çalışıyor…</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-play-fill me-1"></i><span>Çalıştır</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ─── E-posta Gönder Modalı ─── *@
+    @if (_showEmailModal)
+    {
+        <div class="modal-backdrop fade show" style="z-index:1040"></div>
+        <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="emailModalTitle">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="emailModalTitle"><i class="bi bi-envelope me-2"></i>Raporu Mail ile Gönder</h5>
+                        <button type="button" class="btn-close" @onclick='() => _showEmailModal = false' aria-label="Kapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="yi-form-group mb-3">
+                            <label class="yi-label">Alıcı E-posta</label>
+                            <input type="email" class="yi-input" @bind="_emailRecipient" placeholder="ornek@sirket.com" />
+                        </div>
+                        <div class="form-check mb-2">
+                            <input class="form-check-input" type="checkbox" id="includeAiChk" @bind="_includeAiSummary" />
+                            <label class="form-check-label" for="includeAiChk">AI özetini ekle</label>
+                        </div>
+                        @if (_includeAiSummary && string.IsNullOrWhiteSpace(_aiComment))
+                        {
+                            <div class="yi-alert yi-alert-warning py-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>AI analizi henüz oluşturulmadı. Göndermeden önce "AI Analizi" butonuna basın.
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_modalError))
+                        {
+                            <div class="yi-alert yi-alert-danger py-2 small mt-2">@_modalError</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="yi-btn-outline" @onclick='() => _showEmailModal = false'>İptal</button>
+                        <button type="button" class="yi-btn-primary" @onclick="SendViaMailAsync" disabled="@_modalSending">
+                            @if (_modalSending)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Gönderiliyor…</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send me-1"></i><span>Gönder</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* ─── Telegram Gönder Modalı ─── *@
+    @if (_showTelegramModal)
+    {
+        <div class="modal-backdrop fade show" style="z-index:1040"></div>
+        <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="tgModalTitle">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="tgModalTitle"><i class="bi bi-telegram me-2"></i>Telegram ile Gönder</h5>
+                        <button type="button" class="btn-close" @onclick='() => _showTelegramModal = false' aria-label="Kapat"></button>
+                    </div>
+                    <div class="modal-body">
+                        @if (string.IsNullOrWhiteSpace(_telegramChatId))
+                        {
+                            <div class="yi-alert yi-alert-warning py-2 small">
+                                <i class="bi bi-exclamation-triangle me-1"></i>
+                                Telegram hesabınız bağlı değil. Lütfen önce
+                                <a href="/profil" class="yi-link">profil sayfanızdan</a> Telegram hesabınızı bağlayın.
+                            </div>
+                        }
+                        else
+                        {
+                            <div class="yi-form-group mb-3">
+                                <label class="yi-label">Chat ID</label>
+                                <input type="text" class="yi-input" @bind="_telegramChatId" placeholder="Telegram Chat ID" />
+                                <div class="yi-form-hint mt-1 small">Profilinizdeki Chat ID otomatik dolduruldu.</div>
+                            </div>
+                        }
+                        @if (!string.IsNullOrEmpty(_modalError))
+                        {
+                            <div class="yi-alert yi-alert-danger py-2 small mt-2">@_modalError</div>
+                        }
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="yi-btn-outline" @onclick='() => _showTelegramModal = false'>İptal</button>
+                        <button type="button" class="yi-btn-primary" @onclick="SendViaTelegramAsync"
+                                disabled="@(_modalSending || string.IsNullOrWhiteSpace(_telegramChatId))">
+                            @if (_modalSending)
+                            {
+                                <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                                <span>Gönderiliyor…</span>
+                            }
+                            else
+                            {
+                                <i class="bi bi-send me-1"></i><span>Gönder</span>
+                            }
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    }
+
+    @* Sonuç Gösterim Alanı *@
+    <div class="yi-card @ResultCardClass">
+        <div class="yi-card-header d-flex justify-content-between align-items-center">
+            <h2 class="yi-card-title">Sonuçlar</h2>
+            <div class="d-flex gap-2">
+                @if (_model.RawResult is not null)
+                {
+                    <button type="button" class="yi-btn-light yi-btn-sm" @onclick='() => OpenEmailModal()'>
+                        <i class="bi bi-envelope"></i> Mail Gönder
+                    </button>
+                    <button type="button" class="yi-btn-light yi-btn-sm" @onclick='() => OpenTelegramModal()'>
+                        <i class="bi bi-telegram"></i> Telegram
+                    </button>
+                    <button type="button" class="yi-btn-light yi-btn-sm" @onclick="ExportCsvAsync" disabled="@_exporting">
+                        @if (_exporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-file-earmark-spreadsheet"></i>
+                        }
+                        CSV
+                    </button>
+                    <button type="button" class="yi-btn-light yi-btn-sm" @onclick="ExportExcelAsync" disabled="@_exporting">
+                        @if (_exporting)
+                        {
+                            <span class="spinner-border spinner-border-sm me-1" role="status" aria-hidden="true"></span>
+                        }
+                        else
+                        {
+                            <i class="bi bi-file-earmark-excel"></i>
+                        }
+                        Excel
+                    </button>
+                    <button type="button" class="yi-btn-light yi-btn-sm" @onclick="ExportPdfAsync" disabled="@_exporting">
+                        <i class="bi bi-file-earmark-pdf"></i> PDF
+                    </button>
+                }
+            </div>
+        </div>
+        <div class="yi-card-body p-4">
+            @if (_running)
+            {
+                <div class="yi-loading-bar" role="status" aria-label="Calisiyor"></div>
+            }
+            else if (_showParamModal && _model.DisplayResult is null)
+            {
+                <div class="yi-empty">Raporu çalıştırmak için parametre formunu doldurun.</div>
+            }
+            else if (_model.DisplayResult is null)
+            {
+                <div class="yi-empty">Rapor sonucu henüz oluşturulmadı. Başlatmak için 'Çalıştır' butonuna basın.</div>
+            }
+            else
+            {
+                <ResultRenderer Result="@_model.DisplayResult" ResultType="@_model.SelectedReport!.ResultType" Color="@_model.SelectedReport!.Color" />
+            }
+
+            @* Deterministik Anomali Tespiti (IQR) *@
+            @if (_anomalies.Count > 0)
+            {
+                <div class="yi-alert yi-alert-warning mt-3">
+                    <div class="fw-semibold mb-2"><i class="bi bi-exclamation-diamond"></i> Anomali Tespiti (@_anomalies.Count uç değer)</div>
+                    <div class="small">
+                        @foreach (var a in _anomalies.Take(5))
+                        {
+                            <div class="mb-1">
+                                <span class="badge @(a.Severity == "Kritik" ? "bg-danger" : "bg-warning")">@a.Severity</span>
+                                @a.Description
+                            </div>
+                        }
+                        @if (_anomalies.Count > 5)
+                        {
+                            <div class="text-muted">...ve @(_anomalies.Count - 5) adet daha</div>
+                        }
+                    </div>
+                </div>
+            }
+
+            @* AI Tarafından Üretilen Veri Analizi/Yorum *@
+            @if (!string.IsNullOrWhiteSpace(_aiComment))
+            {
+                <div class="yi-alert yi-alert-info mt-3">
+                    <div class="fw-semibold mb-2"><i class="bi bi-info-circle"></i> AI Veri Analizi</div>
+                    <div class="small">@((MarkupString)_aiComment.Replace("\n", "<br/>"))</div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="query" Parameters="@_aiParams" />
+
+@code {
+    [Parameter] public int Id { get; set; }
+
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["queryId"] = Id
+    };
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    private bool _loading = true;
+    private bool _running;
+    private string? _aiComment;
+    private List<YonetIQ.Data.Infrastructure.AnomalyResult> _anomalies = [];
+    private ReportRunViewModel _model = new();
+
+    // Parametre modal state
+    private List<QueryParameterInfo> _paramInfos = [];
+    private bool _showParamModal;
+
+    // Excel export state
+    private bool _exporting;
+
+    // Mail & Telegram modal state
+    private bool    _showEmailModal    = false;
+    private bool    _showTelegramModal = false;
+    private bool    _modalSending      = false;
+    private string? _modalError;
+    private string  _emailRecipient    = string.Empty;
+    private bool    _includeAiSummary  = false;
+    private string  _telegramChatId    = string.Empty;
+
+    private string ResultCardClass => _model.ViewMode switch
+    {
+        "wide"  => "report-wide",
+        "table" => "report-table-focus",
+        "full"  => "report-full-screen",
+        _       => string.Empty
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _loading = true;
+        _aiComment = null;
+
+        // Rapor kaydını yükle
+        var queryRes = await QuerySvc.GetQueryAsync(Id);
+        if (!queryRes.IsSuccess || queryRes.Data is null)
+        {
+            _model = new ReportRunViewModel { Error = "Rapor bulunamadı." };
+            _loading = false;
+            return;
+        }
+
+        _model.SelectedReport = queryRes.Data;
+
+        // SQL'deki parametreleri tespit et
+        _paramInfos = QueryService.ParseParameterInfo(_model.SelectedReport.SqlContent);
+
+        if (_paramInfos.Count > 0)
+        {
+            // Parametreli sorgu → modal göster, otomatik çalıştırma
+            _showParamModal = true;
+        }
+        else
+        {
+            // Parametresiz sorgu → doğrudan çalıştır
+            await ExecuteRunAsync(null);
+        }
+
+        _loading = false;
+    }
+
+    /// <summary>
+    /// "Raporu Yeniden Çalıştır" butonuna tıklandığında tetiklenir.
+    /// Parametreli sorgularda modal açar, parametresizlerde doğrudan çalıştırır.
+    /// </summary>
+    private async Task OnRunButtonClickAsync()
+    {
+        if (_paramInfos.Count > 0)
+        {
+            _showParamModal = true;
+        }
+        else
+        {
+            await ExecuteRunAsync(null);
+        }
+    }
+
+    /// <summary>
+    /// Parametre modalından "Çalıştır" tıklandığında çağrılır.
+    /// Kullanıcının girdiği değerleri toplayıp raporu çalıştırır.
+    /// </summary>
+    private async Task RunFromParamModalAsync()
+    {
+        _showParamModal = false;
+
+        // Parametre adı → değer sözlüğü oluştur
+        var parameters = _paramInfos
+            .Where(p => !string.IsNullOrWhiteSpace(p.Value))
+            .ToDictionary(p => p.Name, p => p.Value, StringComparer.OrdinalIgnoreCase);
+
+        await ExecuteRunAsync(parameters.Count > 0 ? parameters : null);
+    }
+
+    /// <summary>
+    /// Raporu servisten asenkron olarak çalıştırıp sonucu modele yükler.
+    /// </summary>
+    private async Task ExecuteRunAsync(Dictionary<string, string>? parameters)
+    {
+        _running = true;
+        _aiComment = null;
+
+        var res = await ReportSvc.CreateReportRunModelAsync(
+            Id,
+            _model.ViewMode,
+            _model.ResultSearch,
+            parameters);
+
+        if (res.IsSuccess && res.Data is not null)
+        {
+            // Görünüm modunu koruyarak modeli güncelle
+            var viewMode = _model.ViewMode;
+            var search   = _model.ResultSearch;
+            _model = res.Data;
+            _model.ViewMode     = viewMode;
+            _model.ResultSearch = search;
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+
+        _running = false;
+
+        // Deterministik anomali tespiti (IQR)
+        _anomalies = [];
+        if (_model.RawResult is { IsSuccess: true, RowCount: >= 4 })
+        {
+            _anomalies = YonetIQ.Data.Infrastructure.StatisticalAnalyzer.DetectOutliers(_model.RawResult);
+        }
+    }
+
+    /// <summary>
+    /// Ham sonuçlar üzerinden client-side filtreleme yapar.
+    /// </summary>
+    private void ApplyResultFilter()
+    {
+        if (_model.RawResult is null)
+        {
+            _model.DisplayResult = null;
+            _model.DisplayedRowCount = 0;
+            return;
+        }
+
+        _model.DisplayResult     = ReportSvc.FilterResult(_model.RawResult, _model.ResultSearch);
+        _model.DisplayedRowCount = _model.DisplayResult.Rows.Count;
+    }
+
+    /// <summary>
+    /// Ekran yerleşim düzenini değiştirir.
+    /// </summary>
+    private void ChangeViewMode(string mode)
+    {
+        _model.ViewMode = mode switch
+        {
+            "wide"  => "wide",
+            "table" => "table",
+            "full"  => "full",
+            _       => string.Empty
+        };
+    }
+
+    // ─── CSV Export ─────────────────────────────────────────────────────
+
+    private async Task ExportCsvAsync()
+    {
+        if (_model.RawResult is null || _model.SelectedReport is null) return;
+        _exporting = true;
+        try
+        {
+            var bytes  = ExportSvc.ExportToCsv(_model.RawResult);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"{_model.SelectedReport.Name}_{DateTime.Now:yyyyMMdd_HHmm}.csv";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, base64, "text/csv;charset=utf-8");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"CSV oluşturulamadı: {ex.Message}");
+        }
+        _exporting = false;
+    }
+
+    // ─── Excel Export ────────────────────────────────────────────────────
+
+    private async Task ExportExcelAsync()
+    {
+        if (_model.RawResult is null || _model.SelectedReport is null) return;
+        _exporting = true;
+        try
+        {
+            var bytes  = ExportSvc.BuildExcel(_model.RawResult, _model.SelectedReport.Name);
+            var base64 = Convert.ToBase64String(bytes);
+            var fileName = $"{_model.SelectedReport.Name}_{DateTime.Now:yyyyMMdd_HHmm}.xlsx";
+            await JS.InvokeVoidAsync("downloadFileFromBytes", fileName, base64,
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"Excel oluşturulamadı: {ex.Message}");
+        }
+        _exporting = false;
+    }
+
+    // ─── PDF Export ──────────────────────────────────────────────────────
+
+    private async Task ExportPdfAsync()
+    {
+        if (_model.RawResult is null || _model.SelectedReport is null) return;
+        _exporting = true;
+        try
+        {
+            var html = ExportSvc.BuildHtmlReport(_model.RawResult, _model.SelectedReport.Name);
+            await JS.InvokeVoidAsync("printHtmlReport", html, _model.SelectedReport.Name);
+        }
+        catch (Exception ex)
+        {
+            Toast.ShowError($"PDF oluşturulamadı: {ex.Message}");
+        }
+        _exporting = false;
+    }
+
+    // ─── Mail & Telegram ─────────────────────────────────────────────────
+
+    private void OpenEmailModal()
+    {
+        _modalError       = null;
+        _emailRecipient   = SessionSvc.ActiveUser?.Email ?? string.Empty;
+        _includeAiSummary = !string.IsNullOrWhiteSpace(_aiComment);
+        _showEmailModal   = true;
+    }
+
+    private void OpenTelegramModal()
+    {
+        _modalError     = null;
+        _telegramChatId = SessionSvc.ActiveUser?.TelegramChatId ?? string.Empty;
+        _showTelegramModal = true;
+    }
+
+    private async Task SendViaMailAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_emailRecipient))
+        {
+            _modalError = "Alıcı e-posta adresi boş olamaz.";
+            return;
+        }
+        if (_model.SelectedReport is null || _model.RawResult is null) return;
+
+        _modalSending = true;
+        _modalError   = null;
+
+        var aiSummary = _includeAiSummary ? _aiComment : null;
+        var result    = await EmailSvc.SendReportAsync(_emailRecipient, _model.SelectedReport.Name, _model.RawResult, aiSummary);
+
+        _modalSending = false;
+
+        if (result.IsSuccess)
+        {
+            _showEmailModal = false;
+            Toast.ShowSuccess("Rapor başarıyla gönderildi.");
+        }
+        else
+        {
+            _modalError = result.Message ?? "E-posta gönderilemedi.";
+        }
+    }
+
+    private async Task SendViaTelegramAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_telegramChatId)) return;
+        if (_model.SelectedReport is null || _model.RawResult is null) return;
+
+        _modalSending = true;
+        _modalError   = null;
+
+        var result = await TelegramSvc.SendReportSummaryAsync(_telegramChatId, _model.SelectedReport.Name, _model.RawResult, _aiComment);
+
+        _modalSending = false;
+
+        if (result.IsSuccess)
+        {
+            _showTelegramModal = false;
+            Toast.ShowSuccess("Telegram mesajı gönderildi.");
+        }
+        else
+        {
+            _modalError = result.Message ?? "Telegram mesajı gönderilemedi.";
+        }
+    }
+}

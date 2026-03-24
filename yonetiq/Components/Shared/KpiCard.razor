@@ -1,0 +1,73 @@
+@if (Result is null)
+{
+    return;
+}
+
+@if (IsMulti)
+{
+    @* Yan yana birden fazla KPI kartı gösterimi *@
+    <div class="row g-2">
+        @foreach (var row in Result.Rows)
+        {
+            var title = Result.Columns.Count > 0 ? row.GetValueOrDefault(Result.Columns[0])?.ToString() ?? "-" : "-";
+            var val = Result.Columns.Count > 1 ? row.GetValueOrDefault(Result.Columns[1])?.ToString() ?? "0" : "0";
+
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="yi-card yi-kpi-card h-100" style="--yi-kpi-accent:@Color;">
+                    <div class="yi-card-body">
+                        <div class="yi-muted small">@title</div>
+                        <div class="yi-mini-stat-value">@val</div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+else
+{
+    @* Tekli, büyük KPI kartı gösterimi *@
+    var col1 = Result.Columns.FirstOrDefault();
+    var col2 = Result.Columns.Skip(1).FirstOrDefault();
+    var firstRow = Result.Rows.FirstOrDefault();
+
+    var mainVal = col1 is null || firstRow is null
+        ? "0"
+        : firstRow.GetValueOrDefault(col1)?.ToString() ?? "0";
+
+    var subVal = col2 is null || firstRow is null
+        ? null
+        : firstRow.GetValueOrDefault(col2)?.ToString();
+
+    <div class="yi-card yi-kpi-card" style="--yi-kpi-accent:@Color;">
+        <div class="yi-card-body">
+            <div class="yi-muted small">@Title</div>
+            <div class="yi-kpi-main-value">@mainVal</div>
+            @if (!string.IsNullOrWhiteSpace(subVal))
+            {
+                <div class="yi-muted small">Kıyaslama: @subVal</div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    /// <summary>
+    /// KPI değerlerini içeren sorgu sonucu.
+    /// </summary>
+    [Parameter, EditorRequired] public QueryResult Result { get; set; } = default!;
+
+    /// <summary>
+    /// Kartın üst kısmında görünecek başlık.
+    /// </summary>
+    [Parameter] public string Title { get; set; } = "KPI";
+
+    /// <summary>
+    /// Kartın vurgu rengi.
+    /// </summary>
+    [Parameter] public string Color { get; set; } = "#1976d2";
+
+    /// <summary>
+    /// Tüm satırların ayrı ayrı kartlar olarak gösterilip gösterilmeyeceği.
+    /// </summary>
+    [Parameter] public bool IsMulti { get; set; }
+}

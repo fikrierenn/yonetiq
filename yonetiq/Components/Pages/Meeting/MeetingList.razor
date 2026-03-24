@@ -1,0 +1,248 @@
+@page "/toplantilar"
+@using YonetIQ.Components.Shared.AI
+@inject MeetingService MeetingSvc
+@inject NavigationManager Nav
+@inject IToastService Toast
+@inject SessionService SessionSvc
+@inject UserService UserSvc
+
+<!-- 
+    Toplantı Listesi Sayfası (Meeting List).
+    Sistemde kayıtlı tüm toplantıları listeler, arama ve filtreleme imkanı sunar.
+    Kullanıcılar buradan yeni toplantı oluşturabilir veya mevcut toplantıların detayına gidebilir.
+-->
+
+<PageTitle>Toplantılar</PageTitle>
+
+<PageHero Section="Toplantı Modülü"
+          Icon="bi-calendar-event"
+          Title="Toplantılar"
+          Subtitle="Planlanan toplantılar, linkler ve aksiyonlar burada yönetilir.">
+    <Actions>
+        <a class="yi-btn-primary" href="/toplanti/yeni"><i class="bi bi-calendar-plus"></i> Yeni Toplantı</a>
+        <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+    </Actions>
+</PageHero>
+
+<div class="row g-3 mb-3">
+    <!-- İstatistik kartları: Toplam, Bu Ay, Gelecek ve Linkli toplantı sayılarını gösterir -->
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">TOPLAM TOPLANTI</div>
+                <div class="yi-mini-stat-value">@TotalMeetings</div>
+                <div class="yi-mini-stat-sub">Tüm kayıtlar</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">BU AY</div>
+                <div class="yi-mini-stat-value">@ThisMonthMeetings</div>
+                <div class="yi-mini-stat-sub">Aylık planlanan toplantı</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">İLERİ TARİH</div>
+                <div class="yi-mini-stat-value">@UpcomingMeetings</div>
+                <div class="yi-mini-stat-sub">Planlı görüşme adedi</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-12 col-sm-6 col-xl-3">
+        <div class="yi-card yi-mini-stat h-100">
+            <div class="yi-card-body">
+                <div class="yi-mini-stat-label">LİNKLİ TOPLANTI</div>
+                <div class="yi-mini-stat-value">@MeetingsWithLinks</div>
+                <div class="yi-mini-stat-sub">Meet / online bağlantı var</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="yi-card">
+    <div class="yi-card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
+        <h2 class="yi-card-title">Toplantı Listesi</h2>
+        <button type="button" class="yi-btn-outline" @onclick="LoadAsync"><i class="bi bi-arrow-clockwise"></i> Yenile</button>
+    </div>
+    <div class="yi-card-body p-3 p-lg-4">
+        <div class="row g-2 mb-3">
+            <div class="col-12 col-lg-6">
+                <label class="yi-label">Arama</label>
+                <!-- Kullanıcının başlık veya yer bilgisine göre filtreleme yapmasını sağlar -->
+                <input class="yi-input" placeholder="Başlık / yer" @bind="_searchQuery" @bind:event="oninput" />
+            </div>
+        </div>
+
+        @if (_loading)
+        {
+            // Veri çekme işlemi sırasında gösterilen yükleme barı.
+            <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+        }
+        else if (FilteredMeetings.Count == 0)
+        {
+            // Liste boşsa veya arama sonucu bulunamadıysa gösterilen mesaj.
+            <div class="yi-alert yi-alert-light" role="alert">Kayıt bulunamadı.</div>
+        }
+        else
+        {
+            <div class="overflow-x-auto">
+                <table class="yi-table">
+                    <thead>
+                        <tr>
+                            <th>Başlık</th>
+                            <th>Tarih / Saat</th>
+                            <th>Yer / Link</th>
+                            <th>Katılımcılar</th>
+                            <th class="text-right">İşlem</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var meeting in FilteredMeetings)
+                        {
+                            <tr>
+                                <td class="fw-semibold text-primary">@meeting.Title</td>
+                                <td>
+                                    <!-- Toplantı gün ve saatini formatlı gösterir -->
+                                    <div>@meeting.MeetingDate.ToString("dd.MM.yyyy")</div>
+                                    <div class="yi-muted small">@meeting.MeetingDate.ToString("HH:mm")</div>
+                                </td>
+                                <td>
+                                    <div>@meeting.Location</div>
+                                    @if (!string.IsNullOrWhiteSpace(meeting.MeetingLink))
+                                    {
+                                        <a class="yi-link small" href="@meeting.MeetingLink" target="_blank" rel="noopener noreferrer">
+                                            <i class="bi bi-link-45deg"></i> Toplantı linki
+                                        </a>
+                                    }
+                                </td>
+                                <td><span class="text-truncate d-inline-block" style="max-width:150px;">@meeting.Participants</span></td>
+                                <td class="text-right">
+                                    <div class="d-inline-flex gap-2">
+                                        <a class="yi-btn-outline-primary yi-btn-sm" href="@($"/toplanti/{meeting.Id}")">Detay</a>
+                                        <a class="yi-btn-outline yi-btn-sm" href="@($"/toplanti/duzenle/{meeting.Id}")">Düzenle</a>
+                                        <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(meeting.Id)">Sil</button>
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </div>
+</div>
+
+<AiSidebar @ref="_aiSidebar" Module="meeting" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams = new();
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    // Sayfa yükleme durumu.
+    private bool _loading = true;
+    
+    // Arama metni.
+    private string _searchQuery = string.Empty;
+    
+    // Tüm toplantıların listesi.
+    private List<Meeting> _meetings = [];
+
+    // Görünür kullanıcı adları seti (toplantı katılımcı filtresi için)
+    private HashSet<string> _visibleUserNames = [];
+
+    private string _currentRole => SessionSvc.ActiveUser?.Role ?? string.Empty;
+    private bool IsAdmin       => _currentRole == "Genel Müdür";
+    private bool IsUnitManager => _currentRole is "Müdür" or "Direktör";
+
+    // İstatistiksel özetler için hesaplanmış özellikler.
+    private int TotalMeetings => _meetings.Count;
+    private int ThisMonthMeetings => _meetings.Count(x => x.MeetingDate.Month == DateTime.Today.Month && x.MeetingDate.Year == DateTime.Today.Year);
+    private int UpcomingMeetings => _meetings.Count(x => x.MeetingDate.Date >= DateTime.Today);
+    private int MeetingsWithLinks => _meetings.Count(x => !string.IsNullOrWhiteSpace(x.MeetingLink));
+
+    /// <summary>
+    /// Arama kriterine göre filtrelenmiş ve tarihe göre sıralanmış toplantı listesi.
+    /// </summary>
+    private List<Meeting> FilteredMeetings => _meetings
+        .Where(x => string.IsNullOrWhiteSpace(_searchQuery)
+            || x.Title.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase)
+            || (x.Location?.Contains(_searchQuery, StringComparison.OrdinalIgnoreCase) ?? false))
+        .OrderByDescending(x => x.MeetingDate)
+        .ToList();
+
+    protected override async Task OnInitializedAsync()
+    {
+        await BuildVisibleUserNamesAsync();
+        await LoadAsync();
+    }
+
+    private async Task BuildVisibleUserNamesAsync()
+    {
+        if (IsAdmin) { _visibleUserNames = []; return; }
+
+        var ownName = SessionSvc.ActiveUser?.FullName ?? string.Empty;
+
+        if (IsUnitManager)
+        {
+            var deptId = SessionSvc.ActiveUser?.DepartmentLookupId;
+            if (deptId.HasValue)
+            {
+                var deptUsers = await UserSvc.GetUsersByDepartmentAsync(deptId.Value);
+                _visibleUserNames = deptUsers.Select(u => u.FullName).ToHashSet(StringComparer.OrdinalIgnoreCase);
+                _visibleUserNames.Add(ownName);
+                return;
+            }
+        }
+        _visibleUserNames = new(StringComparer.OrdinalIgnoreCase) { ownName };
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        var result = await MeetingSvc.GetAllAsync();
+        if (result.IsSuccess)
+        {
+            var all = result.Data ?? [];
+            if (IsAdmin)
+            {
+                _meetings = all;
+            }
+            else
+            {
+                // Participants stringinde görünür kullanıcılardan en az biri geçiyorsa göster
+                _meetings = all.Where(m =>
+                    _visibleUserNames.Any(name =>
+                        m.Participants.Contains(name, StringComparison.OrdinalIgnoreCase))).ToList();
+            }
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+            _meetings = [];
+        }
+        _loading = false;
+    }
+
+    /// <summary>
+    /// Belirtilen toplantı kaydını siler ve listeyi yeniler.
+    /// </summary>
+    private async Task DeleteAsync(int id)
+    {
+        var result = await MeetingSvc.DeleteAsync(id);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Toplantı silindi.");
+            await LoadAsync();
+        }
+        else
+        {
+            Toast.ShowError(result.Message);
+        }
+    }
+}

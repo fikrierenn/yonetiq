@@ -1,0 +1,335 @@
+@page "/gorevler/sablonlar"
+@inject TaskTemplateService TemplateSvc
+@inject LookupService LookupSvc
+@inject UserService UserSvc
+@inject SessionService SessionSvc
+@inject IToastService Toast
+
+<PageTitle>Görev Şablonları</PageTitle>
+
+<PageHero Section="Görevler"
+          Icon="bi-file-earmark-text"
+          Title="Görev Şablonları"
+          Subtitle="Tekrarlayan görev setlerini şablonlara dönüştürün, tek tıkla uygulayın.">
+    <Actions>
+        <button type="button" class="yi-btn-primary" @onclick="OpenCreateModal">
+            <i class="bi bi-plus-lg"></i> Yeni Şablon
+        </button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_templates.Count == 0)
+{
+    <div class="yi-empty">Henüz görev şablonu yok.</div>
+}
+else
+{
+    <div class="row g-3">
+        @foreach (var tmpl in _templates)
+        {
+            <div class="col-12 col-md-6 col-lg-4">
+                <div class="yi-card h-100">
+                    <div class="yi-card-header d-flex justify-content-between align-items-center">
+                        <span class="fw-bold">@tmpl.Name</span>
+                        @if (!string.IsNullOrEmpty(tmpl.Category))
+                        {
+                            <span class="yi-badge yi-badge-light small">@tmpl.Category</span>
+                        }
+                    </div>
+                    <div class="yi-card-body">
+                        @if (!string.IsNullOrEmpty(tmpl.Description))
+                        {
+                            <p class="yi-muted small mb-2">@tmpl.Description</p>
+                        }
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button class="yi-btn-primary yi-btn-sm" @onclick="() => OpenApplyModal(tmpl)">
+                                <i class="bi bi-play-fill me-1"></i>Uygula
+                            </button>
+                            <button class="yi-btn-outline yi-btn-sm" @onclick="() => OpenEditModal(tmpl.Id)">
+                                <i class="bi bi-pencil me-1"></i>Düzenle
+                            </button>
+                            <button class="yi-btn-outline yi-btn-sm"
+                                    style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                    @onclick="() => DeleteAsync(tmpl.Id)">
+                                <i class="bi bi-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+@* ─── Şablon Düzenle Modal ─── *@
+@if (_showEditModal)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="tplEditTitle">
+        <div class="modal-dialog modal-dialog-centered modal-xl">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tplEditTitle">
+                        <i class="bi bi-file-earmark-text me-2"></i>@(_editTpl.Id == 0 ? "Yeni Şablon" : "Şablonu Düzenle")
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showEditModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="row g-3 mb-3">
+                        <div class="col-md-6">
+                            <label class="yi-label">Şablon Adı</label>
+                            <input type="text" class="yi-input" @bind="_editTpl.Name" placeholder="Örn: Yeni Çalışan Onboarding" />
+                        </div>
+                        <div class="col-md-6">
+                            <label class="yi-label">Kategori</label>
+                            <input type="text" class="yi-input" @bind="_editTpl.Category" placeholder="Örn: İK, IT, Operasyon" />
+                        </div>
+                        <div class="col-12">
+                            <label class="yi-label">Açıklama</label>
+                            <textarea class="yi-input" rows="2" @bind="_editTpl.Description" placeholder="Şablon hakkında kısa açıklama"></textarea>
+                        </div>
+                    </div>
+
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <span class="fw-semibold small">Şablon Görevleri</span>
+                        <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="AddItem">
+                            <i class="bi bi-plus-lg me-1"></i>Görev Ekle
+                        </button>
+                    </div>
+
+                    @if (_editTpl.Items.Count == 0)
+                    {
+                        <div class="yi-empty small py-3">Henüz görev eklenmedi. "Görev Ekle" butonuna basın.</div>
+                    }
+                    else
+                    {
+                        @foreach (var taskItem in _editTpl.Items)
+                        {
+                            <div class="yi-card mb-2 p-2">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-12 col-md-5">
+                                        <label class="yi-label tiny">Görev Başlığı</label>
+                                        <input type="text" class="yi-input" @bind="taskItem.Title" placeholder="Görev başlığı" />
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="yi-label tiny">Öncelik</label>
+                                        <select class="yi-select" @bind="taskItem.Priority">
+                                            <option value="">—</option>
+                                            <option value="Düşük">Düşük</option>
+                                            <option value="Normal">Normal</option>
+                                            <option value="Yüksek">Yüksek</option>
+                                            <option value="Kritik">Kritik</option>
+                                        </select>
+                                    </div>
+                                    <div class="col-md-2">
+                                        <label class="yi-label tiny">Süre (gün)</label>
+                                        <input type="number" min="0" class="yi-input" @bind="taskItem.DueDays" placeholder="0" />
+                                    </div>
+                                    <div class="col-md-3 d-flex justify-content-end">
+                                        <button type="button" class="yi-btn-outline yi-btn-sm"
+                                                style="color:var(--yi-danger);border-color:var(--yi-danger)"
+                                                @onclick="() => RemoveItem(taskItem)">
+                                            <i class="bi bi-trash"></i>
+                                        </button>
+                                    </div>
+                                    <div class="col-12">
+                                        <input type="text" class="yi-input" @bind="taskItem.Description" placeholder="Açıklama (opsiyonel)" />
+                                    </div>
+                                </div>
+                            </div>
+                        }
+                    }
+
+                    @if (!string.IsNullOrEmpty(_editError))
+                    {
+                        <div class="yi-alert yi-alert-danger mt-2">@_editError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showEditModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="SaveTemplateAsync" disabled="@_saving">
+                        @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <span>Kaydet</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@* ─── Şablon Uygula Modal ─── *@
+@if (_showApplyModal && _applyTpl is not null)
+{
+    <div class="modal-backdrop fade show" style="z-index:1040"></div>
+    <div class="modal fade show d-block" tabindex="-1" role="dialog" style="z-index:1050" aria-modal="true" aria-labelledby="tplApplyTitle">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="tplApplyTitle">
+                        <i class="bi bi-play-fill me-2"></i>Şablonu Uygula: @_applyTpl.Name
+                    </h5>
+                    <button type="button" class="btn-close" @onclick="() => _showApplyModal = false" aria-label="Kapat"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="yi-muted small mb-3">Bu şablondaki tüm görevler seçtiğiniz kişiye atanacak.</p>
+                    <div class="mb-3">
+                        <label class="yi-label">Atanacak Kişi</label>
+                        <select class="yi-select" @bind="_applyAssigneeId">
+                            <option value="0">Seçiniz...</option>
+                            @foreach (var usr in _users)
+                            {
+                                <option value="@usr.Id">@usr.FullName</option>
+                            }
+                        </select>
+                    </div>
+                    @if (!string.IsNullOrEmpty(_applyError))
+                    {
+                        <div class="yi-alert yi-alert-danger">@_applyError</div>
+                    }
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="yi-btn-outline" @onclick="() => _showApplyModal = false">İptal</button>
+                    <button type="button" class="yi-btn-primary" @onclick="ApplyTemplateAsync" disabled="@_applying">
+                        @if (_applying) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                        <span>Görevleri Oluştur</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading = true;
+    private bool _saving;
+    private bool _applying;
+    private bool _showEditModal;
+    private bool _showApplyModal;
+    private string? _editError;
+    private string? _applyError;
+
+    private List<TaskTemplate> _templates = [];
+    private List<User> _users = [];
+    private int _defaultStatusId;
+
+    private TaskTemplate _editTpl = new();
+    private TaskTemplate? _applyTpl;
+    private int _applyAssigneeId;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _loading = true;
+
+        var tRes = await TemplateSvc.ListAsync();
+        _templates = tRes.IsSuccess ? (tRes.Data ?? []) : [];
+
+        var uRes = await UserSvc.GetAllAsync();
+        _users = uRes.IsSuccess ? (uRes.Data ?? []) : [];
+
+        var statusRes = await LookupSvc.GetLookupIdAsync("TaskStatus", "Bekliyor");
+        _defaultStatusId = (statusRes.IsSuccess && statusRes.Data.HasValue && statusRes.Data.Value > 0)
+            ? statusRes.Data.Value : 1;
+
+        _loading = false;
+    }
+
+    private void OpenCreateModal()
+    {
+        _editTpl = new TaskTemplate { Items = [] };
+        _editError = null;
+        _showEditModal = true;
+    }
+
+    private async Task OpenEditModal(int id)
+    {
+        var res = await TemplateSvc.GetWithItemsAsync(id);
+        if (res.IsSuccess && res.Data is not null)
+        {
+            _editTpl = res.Data;
+            _editError = null;
+            _showEditModal = true;
+        }
+    }
+
+    private void OpenApplyModal(TaskTemplate tmpl)
+    {
+        _applyTpl = tmpl;
+        _applyAssigneeId = 0;
+        _applyError = null;
+        _showApplyModal = true;
+    }
+
+    private void AddItem() => _editTpl.Items.Add(new TaskTemplateItem());
+    private void RemoveItem(TaskTemplateItem item) => _editTpl.Items.Remove(item);
+
+    private async Task SaveTemplateAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_editTpl.Name)) { _editError = "Şablon adı zorunludur."; return; }
+        if (_editTpl.Items.Any(x => string.IsNullOrWhiteSpace(x.Title))) { _editError = "Tüm görev başlıkları dolu olmalı."; return; }
+
+        _saving = true;
+        _editError = null;
+        var res = await TemplateSvc.SaveTemplateAsync(_editTpl, SessionSvc.ActiveUser?.UserId ?? 1);
+        _saving = false;
+
+        if (res.IsSuccess)
+        {
+            _showEditModal = false;
+            Toast.ShowSuccess("Şablon kaydedildi.");
+            var tRes = await TemplateSvc.ListAsync();
+            _templates = tRes.IsSuccess ? (tRes.Data ?? []) : [];
+        }
+        else
+        {
+            _editError = res.Message ?? "Kayıt başarısız.";
+        }
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        var res = await TemplateSvc.DeleteAsync(id, SessionSvc.ActiveUser?.UserId ?? 1);
+        if (res.IsSuccess)
+        {
+            Toast.ShowSuccess("Şablon silindi.");
+            var tRes = await TemplateSvc.ListAsync();
+            _templates = tRes.IsSuccess ? (tRes.Data ?? []) : [];
+        }
+        else
+        {
+            Toast.ShowError(res.Message);
+        }
+    }
+
+    private async Task ApplyTemplateAsync()
+    {
+        if (_applyAssigneeId == 0) { _applyError = "Kişi seçiniz."; return; }
+        if (_applyTpl is null) return;
+
+        _applying = true;
+        _applyError = null;
+
+        var assignee = _users.FirstOrDefault(u => u.Id == _applyAssigneeId);
+        var res = await TemplateSvc.ApplyTemplateAsync(
+            _applyTpl.Id,
+            _applyAssigneeId,
+            assignee?.FullName ?? "",
+            _defaultStatusId,
+            SessionSvc.ActiveUser?.UserId ?? 1);
+
+        _applying = false;
+
+        if (res.IsSuccess)
+        {
+            _showApplyModal = false;
+            Toast.ShowSuccess($"{res.Data} görev oluşturuldu.");
+        }
+        else
+        {
+            _applyError = res.Message ?? "Uygulama başarısız.";
+        }
+    }
+}

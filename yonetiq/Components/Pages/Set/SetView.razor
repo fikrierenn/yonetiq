@@ -1,0 +1,118 @@
+@page "/set/{Id:int}"
+@using YonetIQ.Components.Shared.AI
+@inject QuerySetService SetSvc
+
+@* 
+    Dashboard / Set İzleme Ekranı.
+    Belirli bir sorgu setine dahil olan tüm sorguları paralel olarak çalıştırır 
+    ve her birini birer kart (Widget) içerisinde görselleştirir.
+*@
+
+<PageTitle>Set Görüntüle</PageTitle>
+
+@if (_isLoading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else if (_querySet is null)
+{
+    <div class="yi-alert yi-alert-warning" role="alert">Görüntülenmek istenen sorgu seti bulunamadı.</div>
+}
+else
+{
+    @* Dashboard Başlık Alanı *@
+    <PageHero Section="Sorgu Panosu"
+              Icon="bi-grid"
+              Title="@_querySet.Name"
+              Subtitle="@_querySet.Description">
+        <Actions>
+            @* Dashboard ayarlarını düzenlemek için form sayfasına gider *@
+            <a class="yi-btn-primary" href="@($"/set/duzenle/{_querySet.Id}")"><i class="bi bi-pencil"></i> Düzenle</a>
+            <a class="yi-btn-outline" href="/set-listesi">Listeye Dön</a>
+            <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan"><i class="bi bi-stars"></i> AI</button>
+        </Actions>
+    </PageHero>
+
+    @* Sorgu Kartları Izgarası *@
+    <div class="row g-3">
+        @foreach (var item in _queryResults.OrderBy(x => x.Meta.OrderIndex))
+        {
+            @* Dashboard ayarlarına göre kart genişliğini ayarlar *@
+            <div class="@GetColumnClass(item.Meta.WidthMd)">
+                <div class="yi-card h-100">
+                    <div class="yi-card-header">
+                        <h2 class="yi-card-title">@item.Query.Name</h2>
+                    </div>
+                    <div class="yi-card-body">
+                        @if (!string.IsNullOrWhiteSpace(item.Query.Description))
+                        {
+                            <div class="yi-muted mb-3 small">@item.Query.Description</div>
+                        }
+                        @* Dinamik sonuç render bileşeni (Tablo, Grafik, KPI vb.) *@
+                        <ResultRenderer Result="@item.Result" ResultType="@item.Query.ResultType" Color="@item.Query.Color" />
+                    </div>
+                </div>
+            </div>
+        }
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="query" Parameters="@_aiParams" />
+
+@code {
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new() { ["queryId"] = Id };
+    private void ToggleAiSidebar() { _aiSidebar?.Toggle(); }
+
+    @* URL'den gelen Set ID'si *@
+    [Parameter] public int Id { get; set; }
+
+    private bool _isLoading = true;
+    private QuerySet? _querySet;
+    
+    // Set içindeki sorguların hem tanımları hem de çalışma sonuçları
+    private List<(SetQuery Meta, QueryRecord Query, QueryResult Result)> _queryResults = [];
+
+    protected override async Task OnParametersSetAsync()
+    {
+        // Parametre değiştiğinde (yeni bir sete tıklandığında) verileri yükle
+        _isLoading = true;
+
+        var setRes = await SetSvc.GetByIdAsync(Id);
+        if (!setRes.IsSuccess || setRes.Data is null)
+        {
+            _querySet = null;
+            _queryResults = [];
+            _isLoading = false;
+            return;
+        }
+
+        _querySet = setRes.Data;
+
+        // Set içindeki tüm sorguları tek bir seferde çalıştır
+        var runRes = await SetSvc.RunSetAsync(Id);
+        if (runRes.IsSuccess)
+        {
+            _queryResults = runRes.Data ?? [];
+        }
+        else
+        {
+            _queryResults = [];
+        }
+        
+        _isLoading = false;
+    }
+
+    /// <summary>
+    /// Veritabanındaki WidthMd (1-12) değerini Bootstrap kolon sınıfına çevirir.
+    /// </summary>
+    private static string GetColumnClass(int widthMd)
+    {
+        var span = Math.Clamp(widthMd, 1, 12);
+        return span switch
+        {
+            12 => "col-12",
+            _ => $"col-12 col-xl-{span}"
+        };
+    }
+}

@@ -1,0 +1,103 @@
+@using YonetIQ.Data.Models
+
+<div class="row g-3 mb-3">
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-stat-card h-100">
+            <div class="yi-card-body">
+                <div class="yi-stat-wrap">
+                    <span class="yi-stat-icon yi-stat-blue"><i class="bi bi-list-check"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="yi-stat-value">@PendingTaskCount</div>
+                        <div class="yi-stat-title">Aktif Görev</div>
+                        <div class="yi-stat-sub">7 gün içindeki aksiyonlar</div>
+                        @GetTargetBadge("total_tasks", PendingTaskCount)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-stat-card h-100">
+            <div class="yi-card-body">
+                <div class="yi-stat-wrap">
+                    <span class="yi-stat-icon yi-stat-green"><i class="bi bi-check2-circle"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="yi-stat-value">@PendingDecisionCount</div>
+                        <div class="yi-stat-title">Bekleyen Karar</div>
+                        <div class="yi-stat-sub">Aksiyon bekleyen kararlar</div>
+                        @GetTargetBadge("open_meetings", PendingDecisionCount)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-stat-card h-100">
+            <div class="yi-card-body">
+                <div class="yi-stat-wrap">
+                    <span class="yi-stat-icon yi-stat-azure"><i class="bi bi-calendar3"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="yi-stat-value">@MonthlyEventCount</div>
+                        <div class="yi-stat-title">Aylık Takvim Olayı</div>
+                        <div class="yi-stat-sub">Resmi/özel gün + planlanan aksiyon</div>
+                        @GetTargetBadge("monthly_events", MonthlyEventCount)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-12 col-md-6 col-xxl-3">
+        <div class="yi-card yi-stat-card h-100">
+            <div class="yi-card-body">
+                <div class="yi-stat-wrap">
+                    <span class="yi-stat-icon yi-stat-orange"><i class="bi bi-grid-1x2"></i></span>
+                    <div class="flex-grow-1">
+                        <div class="yi-stat-value">@DashboardSetCount</div>
+                        <div class="yi-stat-title">Dashboard Seti</div>
+                        <div class="yi-stat-sub">Nav menüye yansıyan panel sayısı</div>
+                        @GetTargetBadge("dashboard_sets", DashboardSetCount)
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public int PendingTaskCount { get; set; }
+    [Parameter] public int PendingDecisionCount { get; set; }
+    [Parameter] public int MonthlyEventCount { get; set; }
+    [Parameter] public int DashboardSetCount { get; set; }
+    [Parameter] public List<KpiTarget> KpiTargets { get; set; } = [];
+
+    private RenderFragment GetTargetBadge(string metricKey, decimal actual)
+    {
+        var target = KpiTargets.FirstOrDefault(t => t.MetricKey == metricKey);
+        if (target is null) return builder => { };
+
+        target.ActualValue = actual;
+        var isSuccess = target.Status == "success";
+        var color     = isSuccess ? "var(--yi-success)" : "var(--yi-danger)";
+        var icon      = isSuccess ? "bi-check-circle-fill" : "bi-exclamation-circle-fill";
+        var opLabel   = target.Operator switch { ">=" => "≥", "<=" => "≤", _ => target.Operator };
+        var label     = $"Hedef: {opLabel} {target.TargetValue:N0}";
+
+        return builder =>
+        {
+            builder.OpenElement(0, "div");
+            builder.AddAttribute(1, "class", "yi-kpi-target-badge mt-1");
+            builder.AddAttribute(2, "style", $"color:{color};font-size:0.75rem;display:flex;align-items:center;gap:4px;");
+            builder.AddAttribute(3, "title", target.Label);
+
+            builder.OpenElement(4, "i");
+            builder.AddAttribute(5, "class", $"bi {icon}");
+            builder.CloseElement();
+
+            builder.AddContent(6, label);
+            builder.CloseElement();
+        };
+    }
+}

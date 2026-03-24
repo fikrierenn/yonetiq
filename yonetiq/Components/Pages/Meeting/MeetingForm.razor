@@ -1,0 +1,344 @@
+@page "/toplanti/yeni"
+@page "/toplanti/duzenle/{Id:int}"
+@using YonetIQ.Components.Shared.AI
+@inject MeetingService MeetingSvc
+@inject IToastService Toast
+@inject NavigationManager Nav
+
+<!-- 
+    Toplanti Planlama ve Duzenleme Formu (Meeting Form).
+    Yeni toplanti olusturmak veya mevcut bir toplanti guncellemek icin kullanilir.
+    AI destekli not onerisi ozelligine sahiptir.
+-->
+
+<PageTitle>Toplantı Formu</PageTitle>
+
+<PageHero Section="Toplantı Modülü"
+          Icon="bi-calendar-plus"
+          Title="@FormTitle"
+          Subtitle="Toplantı planlama ve detay yönetimi.">
+    <Actions>
+        <a class="yi-btn-outline" href="/toplantilar">Toplantı Listesi</a>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    @if (!string.IsNullOrWhiteSpace(_errorMessage))
+    {
+        <div class="yi-alert yi-alert-warning" role="alert">@_errorMessage</div>
+    }
+
+    <div class="yi-card">
+        <div class="yi-card-body p-4">
+            <div class="row g-3">
+                <div class="col-12">
+                    <label class="yi-label">Başlık</label>
+                    <input class="yi-input" @bind="_model.Title" />
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="yi-label">Tarih</label>
+                    <input type="date" class="yi-input" value="@MeetingDateInput" @onchange="OnMeetingDateChanged" />
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="yi-label">Saat</label>
+                    <input type="time" class="yi-input" value="@MeetingTimeInput" @onchange="OnMeetingTimeChanged" />
+                </div>
+
+                <div class="col-12 col-md-4">
+                    <label class="yi-label">Yer</label>
+                    <input class="yi-input" @bind="_model.Location" />
+                </div>
+
+                <div class="col-12">
+                    <label class="yi-label">Toplantı Linki</label>
+                    <div class="d-flex gap-2">
+                        <input class="yi-input" @bind="_model.MeetingLink" />
+                        <a class="yi-btn-outline-primary" href="https://meet.google.com/new" target="_blank" rel="noopener noreferrer">Meet Aç</a>
+                    </div>
+                </div>
+
+                <div class="col-12">
+                    <label class="yi-label">Katılımcılar</label>
+                    <input class="yi-input" @bind="_model.Participants" />
+                </div>
+
+                <div class="col-12">
+                    <label class="yi-label">Gündem</label>
+                    <textarea class="yi-input" rows="4" @bind="_model.Agenda"></textarea>
+                </div>
+
+                <div class="col-12 d-flex justify-content-end gap-2">
+                    <button class="btn btn-sm yi-btn-ai" @onclick="ToggleAiSidebar" title="AI Asistan">
+                        <i class="bi bi-stars"></i> AI Asistan
+                    </button>
+                </div>
+
+                <div class="col-12">
+                    <label class="yi-label">Notlar</label>
+                    <textarea class="yi-input" rows="6" @bind="_model.Notes"></textarea>
+                </div>
+
+                @* Tekrarlama Bölümü — sadece yeni toplantıda göster *@
+                @if (_model.Id == 0)
+                {
+                    <div class="col-12">
+                        <hr class="my-1" />
+                        <label class="yi-label">Tekrarlama</label>
+                        <select class="yi-input" value="@_model.RecurrenceType" @onchange="OnRecurrenceTypeChanged">
+                            <option value="None">Tekrarlanmaz</option>
+                            <option value="Daily">Her Gün</option>
+                            <option value="Weekly">Her Hafta</option>
+                            <option value="Monthly">Her Ay</option>
+                            <option value="Yearly">Her Yıl</option>
+                        </select>
+                    </div>
+
+                    @if (_model.RecurrenceType != "None")
+                    {
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">
+                                Aralık
+                                <small class="text-muted">
+                                    (@(_model.RecurrenceType switch {
+                                        "Daily"   => "gün",
+                                        "Weekly"  => "hafta",
+                                        "Monthly" => "ay",
+                                        "Yearly"  => "yıl",
+                                        _         => ""
+                                    }) de bir)
+                                </small>
+                            </label>
+                            <input type="number" class="yi-input" min="1" max="52" @bind="_model.RecurrenceInterval" />
+                        </div>
+
+                        <div class="col-12 col-md-6">
+                            <label class="yi-label">Seri Bitiş Tarihi</label>
+                            <input type="date" class="yi-input"
+                                   value="@RecurrenceEndDateInput"
+                                   @onchange="OnRecurrenceEndDateChanged" />
+                        </div>
+
+                        <div class="col-12">
+                            <div class="yi-alert yi-alert-info py-2">
+                                <i class="bi bi-info-circle me-1"></i>
+                                <strong>@InstanceCount</strong> toplantı örneği oluşturulacak.
+                            </div>
+                        </div>
+                    }
+                }
+                else if (_model.ParentMeetingId.HasValue)
+                {
+                    <div class="col-12">
+                        <div class="yi-alert yi-alert-info py-2">
+                            <i class="bi bi-arrow-repeat me-1"></i>
+                            Bu toplantı tekrarlayan bir serinin parçasıdır. Yalnızca bu örnek güncellenir.
+                        </div>
+                    </div>
+                }
+
+                <div class="col-12 d-flex gap-2">
+                    <button type="button" class="yi-btn-primary" @onclick="SaveAsync">Kaydet</button>
+                    <a class="yi-btn-outline" href="/toplantilar">İptal</a>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+<AiSidebar @ref="_aiSidebar" Module="meeting" Parameters="@_aiParams" />
+
+@code {
+    [Parameter] public int? Id { get; set; }
+
+    private AiSidebar? _aiSidebar;
+    private Dictionary<string, object> _aiParams => new()
+    {
+        ["meetingId"] = Id ?? 0
+    };
+
+    private void ToggleAiSidebar()
+    {
+        _aiSidebar?.Toggle();
+    }
+
+    private bool _loading = true;
+    private string? _errorMessage;
+    private Meeting _model = new() { MeetingDate = DateTime.Today.AddHours(9) };
+
+    private string FormTitle => _model.Id == 0 ? "Yeni Toplantı Planla" : "Toplantı Düzenle";
+
+    private DateTime _selectedDate = DateTime.Today;
+    private TimeSpan _selectedTime = new(9, 0, 0);
+
+    private string MeetingDateInput
+    {
+        get => _selectedDate.ToString("yyyy-MM-dd");
+        set
+        {
+            if (DateTime.TryParse(value, out var parsed))
+            {
+                _selectedDate = parsed.Date;
+                UpdateMeetingDate();
+            }
+        }
+    }
+
+    private string MeetingTimeInput
+    {
+        get => _selectedTime.ToString(@"hh\:mm");
+        set
+        {
+            if (TimeSpan.TryParse(value, out var parsed))
+            {
+                _selectedTime = parsed;
+                UpdateMeetingDate();
+            }
+        }
+    }
+
+
+    private string RecurrenceEndDateInput
+    {
+        get => _model.RecurrenceEndDate?.ToString("yyyy-MM-dd") ?? _selectedDate.AddMonths(1).ToString("yyyy-MM-dd");
+    }
+
+    private int InstanceCount
+    {
+        get
+        {
+            if (_model.RecurrenceType == "None" || !_model.RecurrenceEndDate.HasValue) return 0;
+            var count = 0;
+            var current = _model.MeetingDate;
+            var end = _model.RecurrenceEndDate.Value;
+            var interval = _model.RecurrenceInterval < 1 ? 1 : _model.RecurrenceInterval;
+            while (count < 500)
+            {
+                current = _model.RecurrenceType switch
+                {
+                    "Daily"   => current.AddDays(interval),
+                    "Weekly"  => current.AddDays(7 * interval),
+                    "Monthly" => current.AddMonths(interval),
+                    "Yearly"  => current.AddYears(interval),
+                    _         => end.AddDays(1)
+                };
+                if (current > end) break;
+                count++;
+            }
+            return count;
+        }
+    }
+
+    private Task OnMeetingDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            _selectedDate = parsed.Date;
+            UpdateMeetingDate();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private Task OnMeetingTimeChanged(ChangeEventArgs e)
+    {
+        if (TimeSpan.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            _selectedTime = parsed;
+            UpdateMeetingDate();
+        }
+
+        return Task.CompletedTask;
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (Id.HasValue)
+        {
+            var result = await MeetingSvc.GetByIdAsync(Id.Value);
+            if (result.IsSuccess && result.Data is not null)
+            {
+                _model = result.Data;
+            }
+            else if (!result.IsSuccess)
+            {
+                _errorMessage = result.Message;
+            }
+        }
+
+        _selectedDate = _model.MeetingDate.Date;
+        _selectedTime = _model.MeetingDate.TimeOfDay;
+
+        _loading = false;
+    }
+
+    private Task OnRecurrenceTypeChanged(ChangeEventArgs e)
+    {
+        _model.RecurrenceType = e.Value?.ToString() ?? "None";
+        if (_model.RecurrenceType != "None" && !_model.RecurrenceEndDate.HasValue)
+            _model.RecurrenceEndDate = _selectedDate.AddMonths(1);
+        return Task.CompletedTask;
+    }
+
+    private Task OnRecurrenceEndDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+            _model.RecurrenceEndDate = parsed.Date;
+        return Task.CompletedTask;
+    }
+
+    private void UpdateMeetingDate()
+    {
+        _model.MeetingDate = _selectedDate.Date.Add(_selectedTime);
+    }
+
+    private async Task SaveAsync()
+    {
+        _errorMessage = null;
+
+        if (string.IsNullOrWhiteSpace(_model.Title))
+        {
+            _errorMessage = "Başlık zorunludur.";
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_model.Location))
+        {
+            _errorMessage = "Yer bilgisi zorunludur.";
+            return;
+        }
+
+        UpdateMeetingDate();
+
+        var result = await MeetingSvc.SaveAsync(_model);
+        
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess("Toplantı kaydedildi.");
+            Nav.NavigateTo($"/toplanti/{result.Data}");
+        }
+        else
+        {
+            _errorMessage = result.Message;
+            Toast.ShowError(result.Message);
+        }
+    }
+}
+
+
+
+
+
+
+
+
+
+
+
+

@@ -1,0 +1,104 @@
+@page "/admin/audit-log"
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@inject AuditService AuditService
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<PageTitle>Denetim İzi</PageTitle>
+
+<PageHero Section="Sistem Yönetimi"
+          Icon="bi-shield-check"
+          Title="Denetim İzi (Audit Log)"
+          Subtitle="Sistemde yapılan kritik işlemleri ve kullanıcı hareketlerini takip edin.">
+    <Actions>
+        <button type="button" class="yi-btn-primary" @onclick="LoadLogsAsync" disabled="@_loading">
+            <i class="bi bi-arrow-clockwise"></i> Yenile
+        </button>
+    </Actions>
+</PageHero>
+
+<div class="yi-card">
+    <div class="yi-card-body p-0">
+        <div class="table-responsive">
+            <table class="yi-table">
+                <thead>
+                    <tr>
+                        <th>Tarih</th>
+                        <th>Kullanıcı</th>
+                        <th>Modül</th>
+                        <th>İşlem</th>
+                        <th>Detay</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @if (_loading)
+                    {
+                        <tr><td colspan="5" class="text-center py-5"><div class="yi-loading-bar" role="status"></div> Yükleniyor...</td></tr>
+                    }
+                    else if (_records == null || !_records.Any())
+                    {
+                        <tr><td colspan="5" class="text-center text-muted py-5">Kayıt bulunamadı.</td></tr>
+                    }
+                    else
+                    {
+                        foreach (var log in _records)
+                        {
+                            <tr>
+                                <td class="text-muted small">@log.CreatedAt.ToLocalTime().ToString("dd.MM.yyyy HH:mm:ss")</td>
+                                <td>
+                                    <div class="d-flex align-items-center gap-2">
+                                        <span class="yi-badge yi-badge-primary">
+                                            @(string.IsNullOrWhiteSpace(log.UserName) ? "?" : log.UserName[..1].ToUpper())
+                                        </span>
+                                        <span class="fw-semibold">@log.UserName</span>
+                                    </div>
+                                </td>
+                                <td><span class="yi-badge yi-badge-light">@log.Module</span></td>
+                                <td><strong>@log.Action</strong></td>
+                                <td>
+                                    <div class="text-truncate" style="max-width: 400px;" title="@log.Details">
+                                        @log.Details
+                                    </div>
+                                </td>
+                            </tr>
+                        }
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+@code {
+    private List<SystemLog>? _records;
+    private bool _loading = true;
+
+    protected override async Task OnInitializedAsync()
+    {
+        // Yetki kontrolü
+        if (SessionSvc.ActiveUser?.Role != "Genel Müdür")
+        {
+            Nav.NavigateTo("/");
+            return;
+        }
+
+        await LoadLogsAsync();
+    }
+
+    private async Task LoadLogsAsync()
+    {
+        _loading = true;
+        var result = await AuditService.ListLogsAsync(250);
+        if (result.IsSuccess)
+        {
+            _records = result.Data;
+        }
+        else
+        {
+            // Hata durumunda boş liste göster
+            _records = [];
+        }
+        _loading = false;
+    }
+}

@@ -1,0 +1,288 @@
+@inherits LayoutComponentBase
+@inject SessionService SessionSvc
+@inject MessageService MessageSvc
+@inject NotificationService NotifSvc
+@inject YonetIQ.Data.Services.AuditService AuditService
+@inject NavigationManager Nav
+@inject IJSRuntime JS
+@using YonetIQ.Data.Infrastructure
+@using YonetIQ.Components.Shared.AI
+@implements IDisposable
+
+<BlazoredToasts />
+
+<div class="yi-app">
+    <aside class="@SidebarClass" aria-label="Ana menü">
+        <div class="yi-sidebar-header">
+            <a href="/" class="yi-sidebar-brand text-decoration-none">
+                <span class="yi-sidebar-logo"><img src="/brand/yonetiq-mark.svg" alt="YonetIQ" /></span>
+                <span>
+                    <span class="yi-sidebar-brand-title"><span class="yi-brand-navy">Yonet</span><span class="yi-brand-teal">IQ</span></span>
+                    <span class="yi-sidebar-brand-sub">Şirket İçi Yönetim Portali</span>
+                </span>
+            </a>
+            <div class="yi-sidebar-client-brand">
+                <img src="/brand/bkmkitap-logo.png" alt="bkmkitap" class="yi-client-logo" />
+            </div>
+            <button type="button" class="yi-sidebar-close d-lg-none" @onclick="ToggleSidebar" aria-label="Menü kapat">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+
+        <div class="yi-sidebar-scroll">
+            <NavMenu />
+        </div>
+    </aside>
+
+    @if (_sidebarOpen)
+    {
+        <button type="button" class="yi-sidebar-backdrop d-lg-none" @onclick="ToggleSidebar" aria-label="Menü kapat"></button>
+    }
+
+    <div class="yi-main">
+        <header class="yi-main-top">
+            <div class="yi-main-top-left">
+                <button class="yi-top-toggle d-lg-none" type="button" @onclick="ToggleSidebar" aria-label="Menü aç">
+                    <i class="bi bi-list"></i>
+                </button>
+                <span class="yi-main-top-title d-lg-none"><span class="yi-brand-navy">Yonet</span><span class="yi-brand-teal">IQ</span></span>
+                <span class="yi-main-top-sub d-none d-lg-inline-flex align-items-center gap-2">
+                    <img src="/brand/bkmkitap-logo.png" alt="bkmkitap" class="yi-topbar-client-logo" />
+                    <span class="yi-topbar-divider">|</span>
+                    <span>Executive Command Center</span>
+                </span>
+            </div>
+            <GlobalSearch />
+            <div class="yi-main-top-right">
+                <ThemeSwitcher />
+                <button id="yi-commandbar-trigger" class="yi-btn-ai" @onclick="OpenCommandBar" title="AI Komut Çubuğu (Ctrl+K)">
+                    <i class="bi bi-stars"></i> AI Asistan
+                </button>
+                <span class="yi-chip yi-chip-date">@DateTime.Now.ToString("dd.MM.yyyy")</span>
+                @if (SessionSvc.IsLoggedIn)
+                {
+                    <div class="yi-topbar-actions me-2">
+                        <button type="button" class="yi-btn yi-btn-ghost yi-btn-sm position-relative yi-message-toggle" @onclick="GoToMessages" aria-label="Mesajlar@(_unreadCount > 0 ? $" ({_unreadCount} okunmamış)" : "")">
+                            <i class="bi bi-chat-left-text fs-5"></i>
+                            @if (_unreadCount > 0)
+                            {
+                                <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger yi-unread-badge" aria-hidden="true">
+                                    @_unreadCount
+                                </span>
+                            }
+                        </button>
+
+                        @* Bildirim Zili *@
+                        <div class="yi-notif-wrapper">
+                            <button type="button"
+                                    class="yi-btn yi-btn-ghost yi-btn-sm position-relative"
+                                    @onclick="ToggleNotifDropdownAsync"
+                                    aria-label="Bildirimler@(_notifCount > 0 ? $" ({_notifCount} yeni)" : "")">
+                                <i class="bi bi-bell fs-5"></i>
+                                @if (_notifCount > 0)
+                                {
+                                    <span class="position-absolute top-0 start-100 translate-middle badge rounded-pill bg-danger yi-unread-badge" aria-hidden="true">
+                                        @(_notifCount > 99 ? "99+" : _notifCount.ToString())
+                                    </span>
+                                }
+                            </button>
+
+                            @if (_notifDropdownOpen)
+                            {
+                                <div class="yi-notif-backdrop" @onclick="() => _notifDropdownOpen = false"></div>
+                                <div class="yi-notif-dropdown">
+                                    <div class="yi-notif-header">
+                                        <span class="yi-notif-header-title">Bildirimler</span>
+                                        @if (_notifCount > 0)
+                                        {
+                                            <button type="button" class="yi-notif-mark-all" @onclick="MarkAllReadAsync">
+                                                Tümünü okundu işaretle
+                                            </button>
+                                        }
+                                    </div>
+                                    @if (_notifs.Count == 0)
+                                    {
+                                        <div class="yi-notif-empty">
+                                            <i class="bi bi-bell-slash"></i>
+                                            <span>Yeni bildirim yok</span>
+                                        </div>
+                                    }
+                                    else
+                                    {
+                                        <ul class="yi-notif-list">
+                                            @foreach (var notif in _notifs)
+                                            {
+                                                <li class="yi-notif-item @(notif.IsRead ? "" : "yi-notif-item--unread")"
+                                                    @onclick="() => ClickNotifAsync(notif)">
+                                                    <span class="yi-notif-icon">
+                                                        @if (notif.Type == NotificationTypes.TaskAssigned)
+                                                        {
+                                                            <i class="bi bi-check2-square text-primary"></i>
+                                                        }
+                                                        else if (notif.Type == NotificationTypes.NewMessage)
+                                                        {
+                                                            <i class="bi bi-chat-left-dots text-success"></i>
+                                                        }
+                                                        else
+                                                        {
+                                                            <i class="bi bi-bell text-warning"></i>
+                                                        }
+                                                    </span>
+                                                    <span class="yi-notif-body">
+                                                        <span class="yi-notif-title">@notif.Title</span>
+                                                        <span class="yi-notif-msg">@notif.Message</span>
+                                                        <span class="yi-notif-time">@notif.CreatedAt.ToLocalTime().ToString("dd.MM HH:mm")</span>
+                                                    </span>
+                                                </li>
+                                            }
+                                        </ul>
+                                    }
+                                </div>
+                            }
+                        </div>
+                    </div>
+                    <a href="/profil" class="yi-topbar-user" title="Profil sayfasına git">
+                        <i class="bi bi-person-circle"></i>
+                        <span class="d-none d-sm-inline">@SessionSvc.ActiveUser?.FullName</span>
+                        <span class="yi-topbar-rol d-none d-md-inline">@SessionSvc.ActiveUser?.Role</span>
+                    </a>
+                    <button type="button" class="yi-btn yi-btn-ghost yi-btn-sm" @onclick="LogoutAsync" aria-label="Çıkış Yap">
+                        <i class="bi bi-box-arrow-right"></i>
+                        <span class="d-none d-md-inline ms-1">Çıkış Yap</span>
+                    </button>
+                }
+            </div>
+        </header>
+
+        <main class="yi-main-content container-fluid">
+            @Body
+        </main>
+
+        <footer class="yi-main-footer">
+            <span>YonetIQ</span>
+            <span>@DateTime.Now.ToString("HH:mm")</span>
+        </footer>
+    </div>
+
+    <CommandBar @ref="_commandBar" CurrentModule="@_currentModule" />
+</div>
+
+@code {
+    private bool _sidebarOpen;
+    private int _unreadCount;
+    private CommandBar? _commandBar;
+    private string _currentModule = "global";
+
+    // Bildirim state
+    private int _notifCount;
+    private List<YonetIQ.Data.Models.Notification> _notifs = new();
+    private bool _notifDropdownOpen;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("eval", @"
+                if (!window._yiCtrlKBound) {
+                    window._yiCtrlKBound = true;
+                    document.addEventListener('keydown', function(e) {
+                        if ((e.ctrlKey || e.metaKey) && e.key === 'k') {
+                            e.preventDefault();
+                            var btn = document.getElementById('yi-commandbar-trigger');
+                            if (btn) btn.click();
+                        }
+                    });
+                }
+            ");
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        Nav.LocationChanged += OnLocationChanged;
+        NotificationService.OnNotificationCreated += OnNotificationPushedAsync;
+
+        if (SessionSvc.IsLoggedIn)
+        {
+            var msgResult = await MessageSvc.GetUnreadCountAsync(SessionSvc.ActiveUser?.UserId ?? 0);
+            if (msgResult.IsSuccess) _unreadCount = msgResult.Data;
+
+            await LoadNotificationsAsync();
+        }
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        var uid = SessionSvc.ActiveUser?.UserId ?? 0;
+        if (uid == 0) return;
+
+        var countResult = await NotifSvc.GetUnreadCountAsync(uid);
+        if (countResult.IsSuccess) _notifCount = countResult.Data;
+
+        var listResult = await NotifSvc.GetRecentAsync(uid, 10);
+        if (listResult.IsSuccess) _notifs = listResult.Data ?? new();
+    }
+
+    // Static event callback — başka bir circuit tetiklediğinde çalışır
+    private async Task OnNotificationPushedAsync(int targetUserId)
+    {
+        if (targetUserId != (SessionSvc.ActiveUser?.UserId ?? 0)) return;
+        await LoadNotificationsAsync();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleNotifDropdownAsync()
+    {
+        _notifDropdownOpen = !_notifDropdownOpen;
+        if (_notifDropdownOpen) await LoadNotificationsAsync();
+    }
+
+    private async Task MarkAllReadAsync()
+    {
+        await NotifSvc.MarkAllReadAsync(SessionSvc.ActiveUser?.UserId ?? 0);
+        await LoadNotificationsAsync();
+    }
+
+    private async Task ClickNotifAsync(YonetIQ.Data.Models.Notification notif)
+    {
+        _ = await NotifSvc.MarkAsReadAsync(notif.Id, SessionSvc.ActiveUser?.UserId ?? 0);
+        _notifDropdownOpen = false;
+        if (!string.IsNullOrEmpty(notif.RelatedUrl))
+            Nav.NavigateTo(notif.RelatedUrl);
+        await LoadNotificationsAsync();
+    }
+
+    // Sayfa değişince mobil sidebar'ı kapat
+    private void OnLocationChanged(object? sender, LocationChangedEventArgs e)
+    {
+        if (_sidebarOpen)
+        {
+            _sidebarOpen = false;
+            InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private void GoToMessages() => Nav.NavigateTo("/mesajlar");
+
+    private string SidebarClass => _sidebarOpen ? "yi-sidebar yi-sidebar-open" : "yi-sidebar";
+
+    private void ToggleSidebar() => _sidebarOpen = !_sidebarOpen;
+
+    private async Task LogoutAsync()
+    {
+        await AuditService.SaveLogAsync("Authentication", "Logout", new { UserId = SessionSvc.ActiveUser?.UserId ?? 0, FullName = SessionSvc.ActiveUser?.FullName ?? string.Empty });
+        SessionSvc.Logout();
+        Nav.NavigateTo("/giris", forceLoad: false);
+    }
+
+    private void OpenCommandBar()
+    {
+        _commandBar?.Open();
+    }
+
+    public void Dispose()
+    {
+        Nav.LocationChanged -= OnLocationChanged;
+        NotificationService.OnNotificationCreated -= OnNotificationPushedAsync;
+    }
+}

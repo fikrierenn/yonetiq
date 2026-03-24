@@ -1,0 +1,494 @@
+@page "/takvim"
+@using System.Globalization
+@inject CalendarService CalendarSvc
+@inject LookupService LookupSvc
+@inject IToastService Toast
+
+<PageTitle>Takvim</PageTitle>
+
+<PageHero Section="Takvim Modülü"
+          Icon="bi-calendar3"
+          Title="Kurumsal Takvim"
+          Subtitle="Toplantı, görev, karar ve resmi/özel günleri tek aylık görünümde yönetin.">
+    <Actions>
+        <button type="button" class="yi-btn-outline" @onclick="() => ChangeMonthAsync(-1)">Önceki Ay</button>
+        <button type="button" class="yi-btn-outline" disabled>@DisplayedMonthTitle</button>
+        <button type="button" class="yi-btn-outline" @onclick="() => ChangeMonthAsync(1)">Sonraki Ay</button>
+    </Actions>
+</PageHero>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status" aria-label="Yükleniyor"></div>
+}
+else
+{
+    <div class="row g-3">
+        <div class="col-12 col-xl-8">
+            <div class="yi-card">
+                <div class="yi-card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+                    <h2 class="yi-card-title">Aylık Takvim</h2>
+                    <button type="button" class="yi-btn-outline yi-btn-sm" @onclick="RefreshAsync"><i class="bi bi-arrow-clockwise"></i> Yenile</button>
+                </div>
+                <div class="yi-card-body">
+                    <div class="overflow-x-auto">
+                        <table class="yi-table yi-table-bordered">
+                            <thead>
+                                <tr>
+                                    @foreach (var dayName in _dayNames)
+                                    {
+                                        <th class="text-center">@dayName</th>
+                                    }
+                                </tr>
+                            </thead>
+                            <tbody>
+                                @foreach (var week in _calendarWeeks)
+                                {
+                                    <tr>
+                                        @foreach (var day in week.Days)
+                                        {
+                                            <td class="p-1" style="width:14.28%">
+                                                <button type="button" class="@GetDayButtonClass(day)" @onclick="() => SelectDayAsync(day)">@day.Day</button>
+                                                @if (GetDayEventCount(day) > 0)
+                                                {
+                                                    <div class="yi-day-note">@GetDayEventCount(day) olay</div>
+                                                }
+                                            </td>
+                                        }
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="yi-card mt-3">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title">@SelectedDayTitle</h2>
+                </div>
+                <div class="yi-card-body">
+                    @if (SelectedDayEvents.Count == 0)
+                    {
+                        <div class="yi-empty">Bu gün için kayıtlı olay yok.</div>
+                    }
+                    else
+                    {
+                        <div class="row g-2">
+                            @foreach (var ev in SelectedDayEvents)
+                            {
+                                <div class="col-12 col-lg-6">
+                                    <div class="yi-event-card">
+                                        <div class="d-flex align-items-center justify-content-between gap-2 mb-1">
+                                            <span class="yi-badge @GetEventBadgeClass(ev.Type)">@ev.Type</span>
+                                            <span class="yi-muted-xs">@ev.Date.ToString("dd.MM.yyyy")</span>
+                                        </div>
+                                        <div class="fw-semibold">@ev.Title</div>
+                                        @if (!string.IsNullOrWhiteSpace(ev.Detail))
+                                        {
+                                            <div class="yi-muted mt-1">@ev.Detail</div>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(ev.Link))
+                                        {
+                                            <a class="yi-link mt-2 d-inline-block" href="@ev.Link">Detaya git</a>
+                                        }
+                                    </div>
+                                </div>
+                            }
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12 col-xl-4">
+            <div class="yi-card">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title">Resmi / Özel Gün Ekle</h2>
+                </div>
+                <div class="yi-card-body">
+                    <div class="mb-2">
+                        <label class="yi-label">Başlık</label>
+                        <input class="yi-input" @bind="_specialDayForm.Title" />
+                    </div>
+
+                    <div class="row g-2 mb-2">
+                        <div class="col-12 col-md-6 col-xl-12">
+                            <label class="yi-label">Tarih</label>
+                            <input type="date" class="yi-input" value="@SpecialDayDateInput" @onchange="OnSpecialDayDateChangedAsync" />
+                        </div>
+                        <div class="col-12 col-md-6 col-xl-12">
+                            <label class="yi-label">Tür</label>
+                            <select class="yi-select" @bind="_specialDayForm.TypeLookupId">
+                                <option value="0">Seçiniz...</option>
+                                @foreach (var type in _specialDayTypes)
+                                {
+                                    <option value="@type.Id">@type.Value</option>
+                                }
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="mb-2">
+                        <label class="yi-label">Detay</label>
+                        <textarea class="yi-input" rows="3" @bind="_specialDayForm.Detail"></textarea>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mb-2">
+                        <input id="tekrarli" type="checkbox" class="yi-check" @bind="_specialDayForm.IsAnnualRecurring" />
+                        <label for="tekrarli" class="yi-label-inline">Her yıl tekrar etsin</label>
+                    </div>
+
+                    <div class="d-flex align-items-center gap-2 mb-3">
+                        <input id="aktif-ozel-gun" type="checkbox" class="yi-check" @bind="_specialDayForm.IsActive" />
+                        <label for="aktif-ozel-gun" class="yi-label-inline">Aktif</label>
+                    </div>
+
+                    <div class="d-flex flex-wrap gap-2">
+                        <button type="button" class="yi-btn-primary" @onclick="SaveSpecialDayAsync" disabled="@_processing">Kaydet</button>
+                        <button type="button" class="yi-btn-outline" @onclick="ClearSpecialDayForm" disabled="@_processing">Temizle</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="yi-card mt-3">
+                <div class="yi-card-header">
+                    <h2 class="yi-card-title">Bu Aya Ait Özel Günler</h2>
+                </div>
+                <div class="yi-card-body">
+                    @if (_specialDays.Count == 0)
+                    {
+                        <div class="yi-empty">Bu ay için kayıtlı resmi/özel gün yok.</div>
+                    }
+                    else
+                    {
+                        <div class="overflow-x-auto">
+                            <table class="yi-table yi-table-sm">
+                                <thead>
+                                    <tr>
+                                        <th>Tarih</th>
+                                        <th>Başlık</th>
+                                        <th>Tür</th>
+                                        <th class="text-right">İşlem</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    @foreach (var item in _specialDays.OrderBy(x => x.Date).ThenBy(x => x.Title))
+                                    {
+                                        <tr>
+                                            <td>@item.Date.ToString("dd.MM")</td>
+                                            <td>
+                                                <div class="fw-semibold">@item.Title</div>
+                                                @if (item.IsAnnualRecurring)
+                                                {
+                                                    <div class="yi-muted-xs">Yıllık tekrar</div>
+                                                }
+                                            </td>
+                                            <td>
+                                                <span class="yi-badge @GetEventBadgeClass(item.TypeLookupId.ToString())">@GetLookupValue(item.TypeLookupId)</span>
+                                            </td>
+                                            <td class="text-right">
+                                                <div class="d-inline-flex gap-1">
+                                                    <button type="button" class="yi-btn-outline-primary yi-btn-sm" @onclick="() => EditSpecialDay(item)">Düzenle</button>
+                                                    <button type="button" class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteSpecialDayAsync(item.Id)">Sil</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            </table>
+                        </div>
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private static readonly string[] _dayNames = ["Pzt", "Sal", "Car", "Per", "Cum", "Cmt", "Paz"];
+
+    private bool _loading = true;
+    private bool _processing;
+
+    private DateTime _displayedMonth = new(DateTime.Today.Year, DateTime.Today.Month, 1);
+    private DateTime _selectedDay = DateTime.Today;
+
+    private readonly Dictionary<DateTime, List<CalendarEvent>> _calendarMap = [];
+    private List<CalendarWeek> _calendarWeeks = [];
+    private List<CalendarSpecialDay> _specialDays = [];
+    private List<Lookup> _specialDayTypes = [];
+
+    private CalendarSpecialDay _specialDayForm = new()
+    {
+        Date = DateTime.Today,
+        IsAnnualRecurring = true,
+        IsActive = true
+    };
+
+    private string DisplayedMonthTitle => _displayedMonth.ToString("MMMM yyyy", CultureInfo.GetCultureInfo("tr-TR"));
+    private string SelectedDayTitle => _selectedDay.ToString("dd MMMM yyyy, dddd", CultureInfo.GetCultureInfo("tr-TR"));
+
+    private List<CalendarEvent> SelectedDayEvents => _calendarMap.TryGetValue(_selectedDay.Date, out var list)
+        ? list.OrderBy(x => x.Priority).ThenBy(x => x.Title).ToList()
+        : [];
+
+    private string SpecialDayDateInput
+    {
+        get => _specialDayForm.Date.ToString("yyyy-MM-dd");
+        set
+        {
+            if (DateTime.TryParse(value, out var parsed))
+            {
+                _specialDayForm.Date = parsed.Date;
+            }
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        _specialDayTypes = await LookupSvc.ListByGroupAsync("SpecialDayType");
+        await LoadCalendarMonthAsync();
+    }
+
+    private Task OnSpecialDayDateChangedAsync(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var parsed))
+        {
+            _specialDayForm.Date = parsed.Date;
+        }
+
+        return Task.CompletedTask;
+    }
+
+    private async Task ChangeMonthAsync(int monthDiff)
+    {
+        _displayedMonth = _displayedMonth.AddMonths(monthDiff);
+        await LoadCalendarMonthAsync();
+    }
+
+    private async Task SelectDayAsync(DateTime day)
+    {
+        if (day.Month != _displayedMonth.Month || day.Year != _displayedMonth.Year)
+        {
+            _displayedMonth = new DateTime(day.Year, day.Month, 1);
+            await LoadCalendarMonthAsync();
+        }
+
+        _selectedDay = day.Date;
+    }
+
+    private async Task RefreshAsync()
+    {
+        await LoadCalendarMonthAsync();
+    }
+
+    private async Task LoadCalendarMonthAsync()
+    {
+        _loading = true;
+
+        _calendarMap.Clear();
+
+        var monthStart = new DateTime(_displayedMonth.Year, _displayedMonth.Month, 1);
+        var monthEnd = monthStart.AddMonths(1).AddDays(-1);
+
+        var eventsResult = await CalendarSvc.ListAsync(monthStart, monthEnd);
+        var events = eventsResult.IsSuccess && eventsResult.Data != null ? eventsResult.Data : [];
+        if (!eventsResult.IsSuccess) Toast.ShowError(eventsResult.Message);
+
+        var specResult = await CalendarSvc.ListSpecialDaysAsync(monthStart, monthEnd, false);
+        _specialDays = specResult.IsSuccess && specResult.Data != null ? specResult.Data : [];
+        if (!specResult.IsSuccess) Toast.ShowError(specResult.Message);
+
+        foreach (var group in events.GroupBy(x => x.Date.Date))
+        {
+            _calendarMap[group.Key] = group.ToList();
+        }
+
+        _calendarWeeks = BuildCalendarWeeks();
+
+        if (_selectedDay.Month != _displayedMonth.Month || _selectedDay.Year != _displayedMonth.Year)
+        {
+            _selectedDay = monthStart;
+        }
+
+        _loading = false;
+    }
+
+    private async Task SaveSpecialDayAsync()
+    {
+        if (string.IsNullOrWhiteSpace(_specialDayForm.Title))
+        {
+            Toast.ShowWarning("Başlık zorunludur.");
+            return;
+        }
+
+        if (_specialDayForm.TypeLookupId == 0)
+        {
+            Toast.ShowWarning("Tür seçiniz.");
+            return;
+        }
+
+        _processing = true;
+
+        try
+        {
+            var isNew = _specialDayForm.Id == 0;
+            var saveResult = await CalendarSvc.SaveSpecialDayAsync(_specialDayForm);
+            
+            if (saveResult.IsSuccess)
+            {
+                Toast.ShowSuccess(isNew ? "Özel gün eklendi." : "Özel gün güncellendi.");
+                _selectedDay = _specialDayForm.Date.Date;
+                ClearSpecialDayForm();
+                await LoadCalendarMonthAsync();
+            }
+            else
+            {
+                Toast.ShowError(saveResult.Message);
+            }
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private async Task DeleteSpecialDayAsync(int id)
+    {
+        _processing = true;
+
+        try
+        {
+            var delResult = await CalendarSvc.DeleteSpecialDayAsync(id);
+            if (delResult.IsSuccess)
+            {
+                Toast.ShowSuccess("Özel gün silindi.");
+                if (_specialDayForm.Id == id)
+                {
+                    ClearSpecialDayForm();
+                }
+                await LoadCalendarMonthAsync();
+            }
+            else
+            {
+                Toast.ShowError(delResult.Message);
+            }
+        }
+        finally
+        {
+            _processing = false;
+        }
+    }
+
+    private void EditSpecialDay(CalendarSpecialDay source)
+    {
+        _specialDayForm = new CalendarSpecialDay
+        {
+            Id = source.Id,
+            Date = source.Date,
+            Title = source.Title,
+            TypeLookupId = source.TypeLookupId,
+            Detail = source.Detail,
+            IsAnnualRecurring = source.IsAnnualRecurring,
+            IsActive = source.IsActive,
+            CreatedAt = source.CreatedAt
+        };
+    }
+
+    private void ClearSpecialDayForm()
+    {
+        _specialDayForm = new CalendarSpecialDay
+        {
+            Date = _selectedDay.Date,
+            IsAnnualRecurring = true,
+            IsActive = true
+        };
+    }
+
+    private int GetDayEventCount(DateTime day)
+    {
+        return _calendarMap.TryGetValue(day.Date, out var list) ? list.Count : 0;
+    }
+
+    private bool IsDayCritical(DateTime day)
+    {
+        return _calendarMap.TryGetValue(day.Date, out var list) && list.Any(x => x.Priority == 0);
+    }
+
+    private string GetDayButtonClass(DateTime day)
+    {
+        var classes = "yi-day-btn";
+
+        if (day.Date == _selectedDay.Date)
+        {
+            return classes + " yi-day-selected";
+        }
+
+        if (IsDayCritical(day))
+        {
+            return classes + " yi-day-critical";
+        }
+
+        if (GetDayEventCount(day) > 0)
+        {
+            return classes + " yi-day-has-events";
+        }
+
+        if (day.Month != _displayedMonth.Month || day.Year != _displayedMonth.Year)
+        {
+            return classes + " yi-day-outside";
+        }
+
+        return classes + " yi-day-normal";
+    }
+
+    private static string GetEventBadgeClass(string type)
+    {
+        return type switch
+        {
+            "Resmi Tatil" or "14" => "yi-badge-danger", // 14: SpecialDayType: Resmi Tatil
+            "Toplantı" or "Meeting" => "yi-badge-primary",
+            "Görev" or "TaskItem" => "yi-badge-warning",
+            _ => "yi-badge-secondary"
+        };
+    }
+
+    private string GetLookupValue(int id)
+    {
+        return _specialDayTypes.FirstOrDefault(x => x.Id == id)?.Value ?? id.ToString();
+    }
+
+    private List<CalendarWeek> BuildCalendarWeeks()
+    {
+        var monthStart = new DateTime(_displayedMonth.Year, _displayedMonth.Month, 1);
+        var offset = ((int)monthStart.DayOfWeek + 6) % 7;
+        var start = monthStart.AddDays(-offset);
+
+        var days = Enumerable.Range(0, 42)
+            .Select(i => start.AddDays(i))
+            .ToList();
+
+        var weeks = new List<CalendarWeek>();
+        for (var i = 0; i < days.Count; i += 7)
+        {
+            weeks.Add(new CalendarWeek { Days = days.Skip(i).Take(7).ToList() });
+        }
+
+        return weeks;
+    }
+
+    private sealed class CalendarWeek
+    {
+        public List<DateTime> Days { get; set; } = [];
+    }
+}
+
+
+
+
+
+
+
+
+

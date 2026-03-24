@@ -1,0 +1,141 @@
+@page "/gorevler/efor-raporu"
+@inject TimeTrackingService TimeSvc
+@inject UserService UserSvc
+@inject SessionService SessionSvc
+
+<PageTitle>Efor Raporu</PageTitle>
+
+<PageHero Section="Görevler"
+          Icon="bi-stopwatch"
+          Title="Efor Raporu"
+          Subtitle="Görev bazlı ve kullanıcı bazlı zaman harcama analizi.">
+</PageHero>
+
+<div class="yi-card mb-3">
+    <div class="yi-card-body">
+        <div class="row g-3 align-items-end">
+            <div class="col-md-4">
+                <label class="yi-label">Kullanıcı</label>
+                <select class="yi-select" @bind="_filterUserId">
+                    <option value="0">Tüm Kullanıcılar</option>
+                    @foreach (var usr in _users)
+                    {
+                        <option value="@usr.Id">@usr.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="yi-label">Başlangıç</label>
+                <input type="date" class="yi-input" @bind="_filterFrom" />
+            </div>
+            <div class="col-md-3">
+                <label class="yi-label">Bitiş</label>
+                <input type="date" class="yi-input" @bind="_filterTo" />
+            </div>
+            <div class="col-md-2">
+                <button type="button" class="yi-btn-primary w-100" @onclick="LoadAsync">
+                    <i class="bi bi-search me-1"></i>Ara
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+@if (_loading)
+{
+    <div class="yi-loading-bar" role="status"></div>
+}
+else if (_entries.Count == 0)
+{
+    <div class="yi-empty">Seçilen kriterlere uygun zaman kaydı bulunamadı.</div>
+}
+else
+{
+    <div class="yi-card mb-3">
+        <div class="yi-card-header d-flex justify-content-between">
+            <span>Toplam: <b>@_entries.Count</b> kayıt</span>
+            <span>Toplam Efor: <b>@TotalDisplay</b></span>
+        </div>
+        <div class="yi-card-body p-0">
+            <table class="table table-hover mb-0 small">
+                <thead>
+                    <tr>
+                        <th>Kullanıcı</th>
+                        <th>Görev ID</th>
+                        <th>Başlangıç</th>
+                        <th>Bitiş</th>
+                        <th>Süre</th>
+                        <th>Not</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var entry in _entries)
+                    {
+                        <tr>
+                            <td>@entry.UserName</td>
+                            <td><a href="/gorev/duzenle/@entry.TaskItemId" class="yi-link">#@entry.TaskItemId</a></td>
+                            <td>@entry.StartedAt.ToLocalTime().ToString("dd.MM.yy HH:mm")</td>
+                            <td>@(entry.EndedAt.HasValue ? entry.EndedAt.Value.ToLocalTime().ToString("dd.MM.yy HH:mm") : "—")</td>
+                            <td>
+                                @if (entry.IsRunning)
+                                {
+                                    <span class="yi-badge" style="background:rgba(227,30,36,.1);color:var(--yi-primary)">
+                                        <i class="bi bi-circle-fill me-1" style="font-size:.5em"></i>Devam
+                                    </span>
+                                }
+                                else
+                                {
+                                    <span>@entry.DurationDisplay</span>
+                                }
+                            </td>
+                            <td class="yi-muted">@entry.Note</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@code {
+    private bool _loading;
+    private List<TimeEntry> _entries = [];
+    private List<User> _users = [];
+    private int _filterUserId;
+    private DateTime? _filterFrom = DateTime.Today.AddDays(-30);
+    private DateTime? _filterTo = DateTime.Today.AddDays(1);
+
+    private string TotalDisplay
+    {
+        get
+        {
+            var total = _entries.Where(e => e.DurationMin.HasValue).Sum(e => e.DurationMin!.Value);
+            return $"{total / 60}s {total % 60}dk";
+        }
+    }
+
+    protected override async Task OnInitializedAsync()
+    {
+        var uRes = await UserSvc.GetAllAsync();
+        _users = uRes.IsSuccess ? (uRes.Data ?? []) : [];
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        ServiceResult<List<TimeEntry>> res;
+
+        if (_filterUserId > 0)
+        {
+            res = await TimeSvc.GetByUserAsync(_filterUserId, _filterFrom, _filterTo);
+        }
+        else
+        {
+            res = await TimeSvc.GetAllAsync(_filterFrom, _filterTo);
+        }
+
+        _entries = res.IsSuccess ? (res.Data ?? []) : [];
+        _loading = false;
+    }
+}

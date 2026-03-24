@@ -1,0 +1,84 @@
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@inject LookupService LookupSvc
+@inject IToastService Toast
+
+<div class="yi-card border-primary shadow-sm">
+    <div class="yi-card-header bg-primary text-white d-flex justify-content-between align-items-center">
+        <h3 class="yi-card-title text-white">@(Decision.Id == 0 ? "Yeni Karar Ekle" : "Kararı Düzenle")</h3>
+        @if (Decision.Id != 0)
+        {
+            <button class="btn btn-close btn-close-white" @onclick="OnCancel"></button>
+        }
+    </div>
+    <div class="yi-card-body">
+        <div class="row g-3">
+            <div class="col-12">
+                <label class="yi-label">Karar İçeriği</label>
+                <textarea class="yi-input" rows="3" @bind="Decision.Content" placeholder="Alınan kararı detaylıca yazınız..."></textarea>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="yi-label">Sorumlu</label>
+                <select class="yi-select" value="@Decision.AssigneeId" @onchange="OnAssigneeChanged">
+                    <option value="">Seçiniz...</option>
+                    @foreach (var user in Users)
+                    {
+                        <option value="@user.Id">@user.FullName</option>
+                    }
+                </select>
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="yi-label">Hedef Bitiş</label>
+                <input type="date" class="yi-input" value="@Decision.DueDate?.ToString("yyyy-MM-dd")" @onchange="OnDateChanged" />
+            </div>
+            <div class="col-12 col-md-4">
+                <label class="yi-label">Öncelik</label>
+                <select class="yi-select" @bind="Decision.PriorityLookupId">
+                    <option value="">Seçiniz...</option>
+                    @foreach (var p in Priorities)
+                    {
+                        <option value="@p.Id">@p.Value</option>
+                    }
+                </select>
+            </div>
+        </div>
+
+        <div class="d-flex gap-2 mt-3">
+            <button class="yi-btn-primary" @onclick="OnSave" disabled="@string.IsNullOrWhiteSpace(Decision.Content)">
+                <i class="bi bi-check-lg"></i> @(Decision.Id == 0 ? "Kararı Kaydet" : "Güncelle")
+            </button>
+            @if (Decision.Id != 0)
+            {
+                <button class="yi-btn-outline" @onclick="OnCancel">Vazgeç</button>
+            }
+        </div>
+    </div>
+</div>
+
+@code {
+    [Parameter] public Decision Decision { get; set; } = new();
+    [Parameter] public List<User> Users { get; set; } = [];
+    [Parameter] public List<Lookup> Priorities { get; set; } = [];
+    [Parameter] public EventCallback OnSave { get; set; }
+    [Parameter] public EventCallback OnCancel { get; set; }
+
+    private void OnAssigneeChanged(ChangeEventArgs e)
+    {
+        if (int.TryParse(e.Value?.ToString(), out var id))
+        {
+            Decision.AssigneeId = id;
+            Decision.AssigneeName = Users.FirstOrDefault(u => u.Id == id)?.FullName ?? string.Empty;
+        }
+        else
+        {
+            Decision.AssigneeId = null;
+            Decision.AssigneeName = string.Empty;
+        }
+    }
+
+    private void OnDateChanged(ChangeEventArgs e)
+    {
+        if (DateTime.TryParse(e.Value?.ToString(), out var date))
+            Decision.DueDate = date;
+    }
+}

@@ -1,0 +1,70 @@
+@using YonetIQ.Data.Models.AI
+@using YonetIQ.Data.Services.AI
+@using YonetIQ.Data.Services
+@inject ProactiveInsightService InsightService
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+@if (_insights.Count > 0)
+{
+    <div class="yi-insight-cards mb-4">
+        <div class="d-flex align-items-center gap-2 mb-2">
+            <i class="bi bi-bell-fill text-warning"></i>
+            <span class="fw-semibold">Dikkat Gerektiren</span>
+            <span class="badge bg-secondary">@_insights.Count</span>
+        </div>
+        <div class="row g-2">
+            @foreach (var item in _insights)
+            {
+                <div class="col-md-6 col-lg-4">
+                    <div class="yi-card yi-insight-card @PriorityClass(item.Priority)"
+                         @onclick="() => Navigate(item)" style="cursor: pointer;">
+                        <div class="yi-card-body d-flex align-items-start gap-2">
+                            <i class="bi @item.Icon @item.IconColor fs-5"></i>
+                            <div class="flex-fill">
+                                <div class="fw-semibold small">@item.Title</div>
+                                <div class="text-muted" style="font-size: 0.75rem;">@item.Detail</div>
+                            </div>
+                            @if (item.NumericValue.HasValue)
+                            {
+                                <span class="badge @PriorityBadge(item.Priority)">@item.NumericValue</span>
+                            }
+                        </div>
+                    </div>
+                </div>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private List<AiInsight> _insights = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (SessionSvc.IsLoggedIn)
+        {
+            _insights = await InsightService.GenerateInsightsAsync(SessionSvc.ActiveUser.UserId);
+        }
+    }
+
+    private void Navigate(AiInsight insight)
+    {
+        if (!string.IsNullOrWhiteSpace(insight.NavigateUrl))
+            Nav.NavigateTo(insight.NavigateUrl);
+    }
+
+    private static string PriorityClass(InsightPriority p) => p switch
+    {
+        InsightPriority.Critical => "yi-insight-critical",
+        InsightPriority.High => "yi-insight-high",
+        _ => ""
+    };
+
+    private static string PriorityBadge(InsightPriority p) => p switch
+    {
+        InsightPriority.Critical => "bg-danger",
+        InsightPriority.High => "bg-warning text-dark",
+        _ => "bg-secondary"
+    };
+}

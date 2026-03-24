@@ -1,0 +1,33 @@
+@* Satır içi AI önerisi — göze batmayan, dismiss edilebilir *@
+
+@if (!_dismissed)
+{
+    <div class="yi-inline-suggestion @CssClass">
+        <i class="bi @Icon"></i>
+        <span class="yi-inline-suggestion-text">@Message</span>
+        @if (ActionLabel is not null)
+        {
+            <button class="btn btn-sm yi-btn-ghost yi-inline-action" @onclick="() => OnAction.InvokeAsync()">
+                @ActionLabel
+            </button>
+        }
+        <button class="btn btn-sm yi-btn-ghost yi-inline-dismiss" @onclick="Dismiss" title="Kapat">
+            <i class="bi bi-x"></i>
+        </button>
+    </div>
+}
+
+@code {
+    [Parameter] public string Message { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "bi-lightbulb";
+    [Parameter] public string? ActionLabel { get; set; }
+    [Parameter] public EventCallback OnAction { get; set; }
+    [Parameter] public string CssClass { get; set; } = string.Empty;
+
+    private bool _dismissed;
+
+    private void Dismiss()
+    {
+        _dismissed = true;
+    }
+}
