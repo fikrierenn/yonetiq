@@ -3,7 +3,7 @@
 ## Session Başlangıç Protokolü
 > **İLK İŞ:** `C:/Users/fikri.eren/.claude/projects/D--Dev-yonet/memory/MAIN_INDEX.md` oku.
 > INDEX'ten sadece görevle ilgili domain dosyalarını oku — hepsini değil (token tasarrufu).
-> **MASTER PLAN:** `D:/Dev/yonet/YONETIQ_MASTER_PLAN.md` — 10 bölüm, 25 adım uygulama sırası. Bölüm 0'dan başla.
+> **UNIFIED PLAN:** `D:/Dev/yonet/YONETIQ_UNIFIED_MASTER.md` — 49 adım, 7 faz. Faz 1 adım 1 tamamlandı, adım 2'den devam.
 > **SKILL:** `.claude/skills/yonetiq-platform/SKILL.md` — proje bilgi tabanı.
 
 ## Memory Sistemi (Hiyerarşik Context Architecture)
