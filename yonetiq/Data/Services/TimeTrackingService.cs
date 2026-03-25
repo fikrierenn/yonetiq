@@ -117,7 +117,7 @@ public class TimeTrackingService(IConfiguration config, AuditService auditSvc) :
         var updateRes = await ExecuteServiceAsync<bool>(async conn =>
         {
             await conn.ExecuteAsync(@"
-                UPDATE TimeEntries SET EndedAt = @Now, DurationMin = @Duration, Note = @Note WHERE Id = @Id",
+                UPDATE TimeEntries SET EndedAt = @Now, DurationMin = @Duration, Note = @Note, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Now = now, Duration = duration, Note = note, Id = entryId });
             return true;
         });

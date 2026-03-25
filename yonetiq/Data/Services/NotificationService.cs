@@ -83,7 +83,7 @@ public class NotificationService(IConfiguration config, AuditService auditServic
     {
         return await ExecuteServiceAsync<int>(async conn =>
             await conn.ExecuteAsync(
-                "UPDATE Notifications SET IsRead = 1 WHERE Id = @Id AND UserId = @UserId",
+                "UPDATE Notifications SET IsRead = 1, UpdatedAt = GETUTCDATE() WHERE Id = @Id AND UserId = @UserId",
                 new { Id = notificationId, UserId = userId }));
     }
 
@@ -95,7 +95,7 @@ public class NotificationService(IConfiguration config, AuditService auditServic
         return await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE Notifications SET IsRead = 1 WHERE UserId = @UserId AND IsRead = 0",
+                "UPDATE Notifications SET IsRead = 1, UpdatedAt = GETUTCDATE() WHERE UserId = @UserId AND IsRead = 0",
                 new { UserId = userId });
             LogAction("Notification", "MarkAllRead", new { UserId = userId });
         });

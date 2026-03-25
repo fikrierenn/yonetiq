@@ -68,7 +68,7 @@ public class ScheduledReportService(IConfiguration config, AuditService auditSvc
                         QueryRecordId = @QueryRecordId, Title = @Title, Channel = @Channel,
                         Recipient = @Recipient, FrequencyType = @FrequencyType, RunTime = @RunTime,
                         DayOfWeek = @DayOfWeek, DayOfMonth = @DayOfMonth,
-                        IsActive = @IsActive, NextRunAt = @NextRunAt
+                        IsActive = @IsActive, NextRunAt = @NextRunAt, UpdatedAt = GETUTCDATE()
                     WHERE Id = @Id", sr);
                 LogAction("ScheduledReport", "Update", new { Title = sr.Title, UserId = userId });
                 return sr.Id;
@@ -114,7 +114,7 @@ public class ScheduledReportService(IConfiguration config, AuditService auditSvc
             if (sr is null) return false;
             var next = ComputeNextRun(sr);
             await conn.ExecuteAsync(
-                "UPDATE ScheduledReports SET LastRunAt = GETUTCDATE(), NextRunAt = @Next WHERE Id = @Id",
+                "UPDATE ScheduledReports SET LastRunAt = GETUTCDATE(), NextRunAt = @Next, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Id = id, Next = next });
             return true;
         });

@@ -33,12 +33,20 @@ public class ContextBuilderService(
     /// </summary>
     public async Task<SkillContext> BuildContextAsync(SkillDefinition skill, AiRequest request)
     {
+        var activeUser = sessionSvc.ActiveUser;
         var context = new SkillContext
         {
-            User = sessionSvc.ActiveUser,
+            User = activeUser,
             UserInput = request.UserInput,
             ContextSummary = string.Empty
         };
+
+        // Null safety: oturum yoksa boş context dön
+        if (activeUser is null || !sessionSvc.IsLoggedIn)
+        {
+            logger.LogWarning("ContextBuilder: ActiveUser null veya login değil");
+            return context;
+        }
 
         var summaryParts = new List<string>();
 

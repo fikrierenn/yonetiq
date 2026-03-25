@@ -51,11 +51,6 @@ public class DataSource : BaseEntity
     /// </summary>
     public int? CreatedByUserId { get; set; }
 
-    /// <summary>
-    /// Son güncelleme zaman damgası.
-    /// </summary>
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
     // ─── Runtime-only (NotMapped) ────────────────────────────────────────────
 
     /// <summary>

@@ -56,7 +56,7 @@ public class TaskTemplateService(IConfiguration config, AuditService auditSvc)
             {
                 await conn.ExecuteAsync(@"
                     UPDATE TaskTemplates SET Name=@Name, Description=@Description,
-                           Category=@Category, IsActive=@IsActive WHERE Id=@Id",
+                           Category=@Category, IsActive=@IsActive, UpdatedAt=GETUTCDATE() WHERE Id=@Id",
                     new { tpl.Name, tpl.Description, tpl.Category, tpl.IsActive, tpl.Id });
                 tplId = tpl.Id;
                 await conn.ExecuteAsync("DELETE FROM TaskTemplateItems WHERE TaskTemplateId=@Id", new { Id = tplId });

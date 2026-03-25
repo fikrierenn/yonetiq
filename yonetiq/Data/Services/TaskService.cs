@@ -131,10 +131,11 @@ public class TaskService(IConfiguration config, AuditService auditService, Notif
                 {
                     var sql = @"
                         UPDATE TaskItems
-                        SET Title = @Title, Description = @Description, AssigneeName = @AssigneeName, 
-                            AssigneeId = @AssigneeId, AssignedAt = @AssignedAt, DueDate = @DueDate, 
+                        SET Title = @Title, Description = @Description, AssigneeName = @AssigneeName,
+                            AssigneeId = @AssigneeId, AssignedAt = @AssignedAt, DueDate = @DueDate,
                             PriorityLookupId = @PriorityLookupId, StatusLookupId = @StatusLookupId,
-                            SourceEntityType = @SourceEntityType, SourceEntityId = @SourceEntityId
+                            SourceEntityType = @SourceEntityType, SourceEntityId = @SourceEntityId,
+                            UpdatedAt = GETUTCDATE()
                         WHERE Id = @Id";
                     await conn.ExecuteAsync(sql, new
                     {
@@ -182,7 +183,7 @@ public class TaskService(IConfiguration config, AuditService auditService, Notif
             catch (SqlException ex) when (IsCompatibleWithFallback(ex))
             {
                 await conn.ExecuteAsync(
-                    "UPDATE TaskItems SET StatusLookupId = @StatusLookupId WHERE Id = @Id",
+                    "UPDATE TaskItems SET StatusLookupId = @StatusLookupId, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                     new { Id = id, StatusLookupId = newStatusLookupId });
             }
             LogAction("Task", "UpdateStatus", new { Id = id, NewStatusId = newStatusLookupId });
@@ -219,14 +220,14 @@ public class TaskService(IConfiguration config, AuditService auditService, Notif
             decimal newProgress = completed ? 100 : 0;
 
             await conn.ExecuteAsync(
-                "UPDATE KeyResults SET CurrentValue = @V, Progress = @P WHERE Id = @Id",
+                "UPDATE KeyResults SET CurrentValue = @V, Progress = @P, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { V = newValue, P = newProgress, Id = kr.Id });
 
             var avgProg = await conn.ExecuteScalarAsync<decimal>(
                 "SELECT AVG(Progress) FROM KeyResults WHERE ObjectiveId = @ObjId",
                 new { ObjId = kr.ObjectiveId });
             await conn.ExecuteAsync(
-                "UPDATE Objectives SET Progress = @P WHERE Id = @Id",
+                "UPDATE Objectives SET Progress = @P, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { P = avgProg, Id = kr.ObjectiveId });
         }
     }

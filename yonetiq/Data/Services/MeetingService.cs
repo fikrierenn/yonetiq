@@ -91,7 +91,8 @@ public class MeetingService(IConfiguration config, AuditService auditService) : 
                         Notes = @Notes,
                         RecurrenceType = @RecurrenceType,
                         RecurrenceInterval = @RecurrenceInterval,
-                        RecurrenceEndDate = @RecurrenceEndDate
+                        RecurrenceEndDate = @RecurrenceEndDate,
+                        UpdatedAt = GETUTCDATE()
                     WHERE Id = @Id";
                 await conn.ExecuteAsync(sql, meeting);
                 LogAction("Meeting", "Update", new { MeetingId = meeting.Id, Title = meeting.Title });
@@ -196,7 +197,8 @@ public class MeetingService(IConfiguration config, AuditService auditService) : 
                         StatusLookupId = @StatusLookupId,
                         PriorityLookupId = @PriorityLookupId,
                         IsConvertedToTask = @IsConvertedToTask,
-                        LinkedTaskId = @LinkedTaskId
+                        LinkedTaskId = @LinkedTaskId,
+                        UpdatedAt = GETUTCDATE()
                     WHERE Id = @Id";
                 await conn.ExecuteAsync(sql, decision);
                 LogAction("Decision", "Update", new { DecisionId = decision.Id });
@@ -225,7 +227,7 @@ public class MeetingService(IConfiguration config, AuditService auditService) : 
         return await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE Decisions SET StatusLookupId = @Status WHERE Id = @Id",
+                "UPDATE Decisions SET StatusLookupId = @Status, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Id = id, Status = statusLookupId });
         });
     }
@@ -330,7 +332,7 @@ public class MeetingService(IConfiguration config, AuditService auditService) : 
             // 4. Kararı güncelle
             var updateSql = @"
                 UPDATE Decisions 
-                SET IsConvertedToTask = 1, LinkedTaskId = @TaskId 
+                SET IsConvertedToTask = 1, LinkedTaskId = @TaskId, UpdatedAt = GETUTCDATE()
                 WHERE Id = @Id";
 
             await conn.ExecuteAsync(updateSql, new { TaskId = taskId, Id = decisionId }, transaction);

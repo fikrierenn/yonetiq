@@ -14,30 +14,44 @@ namespace YonetIQ.Data.Services;
 /// </summary>
 public class QueryService(IConfiguration config, AuditService auditService, DataSourceService dataSourceSvc) : BaseService(config, auditService)
 {
-    /// <summary>
-    /// QueryRecords tablosunda 'AllowDml' kolonunun olup olmadığını kontrol eder.
-    /// </summary>
+    // Schema detection cache — her sorguda DB round-trip yerine static cache
+    private static bool? _hasAllowDmlColumn;
+    private static bool? _hasUsagePurposeColumn;
+    private static readonly SemaphoreSlim _schemaCacheLock = new(1, 1);
+
+    // Table schema cache — GetTableSchemaAsync sonuçlarını 5 dk cache'ler
+    private static readonly Dictionary<int, (Dictionary<string, List<string>> Data, DateTime ExpiresAt)> _tableSchemaCache = new();
+    private static readonly SemaphoreSlim _tableSchemaCacheLock = new(1, 1);
+    private const int TableSchemaCacheTtlMinutes = 5;
+
     private async Task<bool> HasAllowDmlColumnAsync(SqlConnection conn)
     {
-        var result = await conn.ExecuteScalarAsync<int>(@"
-            SELECT CASE
-                WHEN COL_LENGTH('dbo.QueryRecords', 'AllowDml') IS NULL THEN 0
-                ELSE 1
-            END");
-        return result == 1;
+        if (_hasAllowDmlColumn.HasValue) return _hasAllowDmlColumn.Value;
+        await _schemaCacheLock.WaitAsync();
+        try
+        {
+            if (_hasAllowDmlColumn.HasValue) return _hasAllowDmlColumn.Value;
+            _hasAllowDmlColumn = await conn.ExecuteScalarAsync<int>(@"
+                SELECT CASE WHEN COL_LENGTH('dbo.QueryRecords','AllowDml') IS NULL
+                THEN 0 ELSE 1 END") == 1;
+            return _hasAllowDmlColumn.Value;
+        }
+        finally { _schemaCacheLock.Release(); }
     }
 
-    /// <summary>
-    /// Sorgu kayıtları tablosunda 'UsagePurposeLookupId' kolonunun olup olmadığını kontrol eder.
-    /// </summary>
     private async Task<bool> HasUsagePurposeColumnAsync(SqlConnection conn)
     {
-        var result = await conn.ExecuteScalarAsync<int>(@"
-            SELECT CASE
-                WHEN COL_LENGTH('dbo.QueryRecords', 'UsagePurposeLookupId') IS NULL THEN 0
-                ELSE 1
-            END");
-        return result == 1;
+        if (_hasUsagePurposeColumn.HasValue) return _hasUsagePurposeColumn.Value;
+        await _schemaCacheLock.WaitAsync();
+        try
+        {
+            if (_hasUsagePurposeColumn.HasValue) return _hasUsagePurposeColumn.Value;
+            _hasUsagePurposeColumn = await conn.ExecuteScalarAsync<int>(@"
+                SELECT CASE WHEN COL_LENGTH('dbo.QueryRecords','UsagePurposeLookupId') IS NULL
+                THEN 0 ELSE 1 END") == 1;
+            return _hasUsagePurposeColumn.Value;
+        }
+        finally { _schemaCacheLock.Release(); }
     }
 
     // DDL komutları — AllowDml=true olsa bile her zaman engellenir
@@ -302,14 +316,23 @@ public class QueryService(IConfiguration config, AuditService auditService, Data
     /// </summary>
     public async Task<ServiceResult<Dictionary<string, List<string>>>> GetTableSchemaAsync(int? dataSourceId = null)
     {
+        var cacheKey = dataSourceId ?? -1;
+
+        // Cache kontrolü
+        await _tableSchemaCacheLock.WaitAsync();
+        try
+        {
+            if (_tableSchemaCache.TryGetValue(cacheKey, out var cached) && cached.ExpiresAt > DateTime.UtcNow)
+                return ServiceResult<Dictionary<string, List<string>>>.Success(cached.Data);
+        }
+        finally { _tableSchemaCacheLock.Release(); }
+
         try
         {
             var (connStr, serverType) = await dataSourceSvc.GetConnectionInfoAsync(dataSourceId);
             using var conn = ConnectionFactory.Create(serverType, connStr);
             conn.Open();
 
-            // INFORMATION_SCHEMA.COLUMNS üç DB tipinde de (MSSQL/PG/MySQL) çalışır
-            // PG ve MySQL iç sistem şemalarını filtrele
             var schemaSql = serverType.ToUpperInvariant() switch
             {
                 "POSTGRESQL" or "POSTGRES" or "PG" => @"
@@ -333,6 +356,11 @@ public class QueryService(IConfiguration config, AuditService auditService, Data
             var schema = rows
                 .GroupBy(x => x.TABLE_NAME)
                 .ToDictionary(g => g.Key, g => g.Select(x => x.COLUMN_NAME).ToList());
+
+            // Cache'e yaz
+            await _tableSchemaCacheLock.WaitAsync();
+            try { _tableSchemaCache[cacheKey] = (schema, DateTime.UtcNow.AddMinutes(TableSchemaCacheTtlMinutes)); }
+            finally { _tableSchemaCacheLock.Release(); }
 
             return ServiceResult<Dictionary<string, List<string>>>.Success(schema);
         }

@@ -61,7 +61,8 @@ public class OkrService(IConfiguration config, AuditService auditSvc) : BaseServ
             {
                 await conn.ExecuteAsync(@"
                     UPDATE Objectives SET Title=@Title, Description=@Description, OwnerId=@OwnerId,
-                           OwnerName=@OwnerName, Level=@Level, Period=@Period, Year=@Year, Status=@Status
+                           OwnerName=@OwnerName, Level=@Level, Period=@Period, Year=@Year, Status=@Status,
+                           UpdatedAt=GETUTCDATE()
                     WHERE Id=@Id", obj);
                 objId = obj.Id;
                 LogAction("OKR", "Update", obj.Title);
@@ -89,7 +90,7 @@ public class OkrService(IConfiguration config, AuditService auditSvc) : BaseServ
             }
 
             await conn.ExecuteAsync(
-                "UPDATE KeyResults SET CurrentValue = @Val, Progress = @Prog WHERE Id = @Id",
+                "UPDATE KeyResults SET CurrentValue = @Val, Progress = @Prog, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Val = currentValue, Prog = progress, Id = krId });
 
             // Objective progress'i güncelle (KR'ların ortalaması)
@@ -97,7 +98,7 @@ public class OkrService(IConfiguration config, AuditService auditSvc) : BaseServ
                 "SELECT AVG(Progress) FROM KeyResults WHERE ObjectiveId = @ObjId",
                 new { ObjId = kr.ObjectiveId });
             await conn.ExecuteAsync(
-                "UPDATE Objectives SET Progress = @P WHERE Id = @Id",
+                "UPDATE Objectives SET Progress = @P, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { P = avgProg, Id = kr.ObjectiveId });
 
             return true;
@@ -123,7 +124,7 @@ public class OkrService(IConfiguration config, AuditService auditSvc) : BaseServ
                 await conn.ExecuteAsync(@"
                     UPDATE KeyResults SET Title=@Title, MetricType=@MetricType, StartValue=@StartValue,
                            TargetValue=@TargetValue, Unit=@Unit, OwnerId=@OwnerId, OwnerName=@OwnerName,
-                           LinkedTaskId=@LinkedTaskId WHERE Id=@Id", kr);
+                           LinkedTaskId=@LinkedTaskId, UpdatedAt=GETUTCDATE() WHERE Id=@Id", kr);
                 return kr.Id;
             }
         });

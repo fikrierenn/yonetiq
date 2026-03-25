@@ -177,6 +177,7 @@
     private int _notifCount;
     private List<YonetIQ.Data.Models.Notification> _notifs = new();
     private bool _notifDropdownOpen;
+    private bool _disposed;
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -226,9 +227,14 @@
     // Static event callback — başka bir circuit tetiklediğinde çalışır
     private async Task OnNotificationPushedAsync(int targetUserId)
     {
+        if (_disposed) return;
         if (targetUserId != (SessionSvc.ActiveUser?.UserId ?? 0)) return;
-        await LoadNotificationsAsync();
-        await InvokeAsync(StateHasChanged);
+        try
+        {
+            await LoadNotificationsAsync();
+            await InvokeAsync(StateHasChanged);
+        }
+        catch (ObjectDisposedException) { /* circuit zaten kapatılmış */ }
     }
 
     private async Task ToggleNotifDropdownAsync()
@@ -282,6 +288,7 @@
 
     public void Dispose()
     {
+        _disposed = true;
         Nav.LocationChanged -= OnLocationChanged;
         NotificationService.OnNotificationCreated -= OnNotificationPushedAsync;
     }

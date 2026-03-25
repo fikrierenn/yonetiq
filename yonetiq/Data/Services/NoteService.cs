@@ -74,7 +74,8 @@ public class NoteService(IConfiguration config, AuditService auditService, TaskS
                         Tags = @Tags,
                         ReminderAt = @ReminderAt,
                         IsReminderDismissed = @IsReminderDismissed,
-                        LinkedTaskId = @LinkedTaskId
+                        LinkedTaskId = @LinkedTaskId,
+                        UpdatedAt = GETUTCDATE()
                     WHERE Id = @Id AND UserId = @UserId
                     """, note);
                 LogAction("Note", "Update", new { NoteId = note.Id, Title = note.Title });
@@ -99,7 +100,7 @@ public class NoteService(IConfiguration config, AuditService auditService, TaskS
         return await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE PersonalNotes SET IsReminderDismissed = 1 WHERE Id = @Id AND UserId = @UserId",
+                "UPDATE PersonalNotes SET IsReminderDismissed = 1, UpdatedAt = GETUTCDATE() WHERE Id = @Id AND UserId = @UserId",
                 new { Id = id, UserId = userId });
         });
     }
@@ -140,7 +141,7 @@ public class NoteService(IConfiguration config, AuditService auditService, TaskS
         return await ExecuteServiceAsync<int>(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE PersonalNotes SET LinkedTaskId = @TaskId WHERE Id = @NoteId AND UserId = @UserId",
+                "UPDATE PersonalNotes SET LinkedTaskId = @TaskId, UpdatedAt = GETUTCDATE() WHERE Id = @NoteId AND UserId = @UserId",
                 new { TaskId = taskId, NoteId = noteId, UserId = userId });
 
             LogAction("Note", "ConvertToTask", new { NoteId = noteId, TaskId = taskId });

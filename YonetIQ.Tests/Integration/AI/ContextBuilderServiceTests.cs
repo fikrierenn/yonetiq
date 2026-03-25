@@ -92,8 +92,8 @@ public class ContextBuilderServiceTests
         context.Entities["TaskItem"] = new TaskItem { Title = "Test Task" };
         context.ContextData["pendingTasks"] = "5";
 
-        Assert.Equal(1, context.Entities.Count);
-        Assert.Equal(1, context.ContextData.Count);
+        Assert.Single(context.Entities);
+        Assert.Single(context.ContextData);
         Assert.Equal(100, context.EstimatedTokenCount);
     }
 

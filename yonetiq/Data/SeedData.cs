@@ -25,6 +25,7 @@ public static partial class SeedData
         if (!await TableExistsAsync(conn, "Users")) return;
 
         // Altyapı Hazırlıkları (InfrastructureSeed.cs)
+        await PrepareUpdatedAtColumnsAsync(conn);
         await PrepareOkrInfrastructureAsync(conn);
         await PrepareUserPasswordColumnsAsync(conn);
         await PrepareLookupsTableAsync(conn);

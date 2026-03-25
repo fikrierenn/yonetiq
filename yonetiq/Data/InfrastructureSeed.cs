@@ -9,6 +9,22 @@ namespace YonetIQ.Data;
 /// </summary>
 public static partial class SeedData
 {
+    private static async Task PrepareUpdatedAtColumnsAsync(SqlConnection conn)
+    {
+        var tables = new[] {
+            "TaskItems", "Meetings", "Decisions", "PersonalNotes",
+            "Users", "QueryRecords", "DataSources", "ApprovalRequests", "Objectives",
+            "ApprovalSteps", "KeyResults", "KpiTargets", "Notifications",
+            "TimeEntries", "TaskTemplates", "ScheduledReports", "AiPatterns"
+        };
+        foreach (var tbl in tables)
+        {
+            await conn.ExecuteAsync($@"
+                IF COL_LENGTH('dbo.{tbl}', 'UpdatedAt') IS NULL
+                    ALTER TABLE [{tbl}] ADD UpdatedAt DATETIME2 NULL");
+        }
+    }
+
     private static async Task PrepareOkrInfrastructureAsync(SqlConnection conn)
     {
         await conn.ExecuteAsync(@"

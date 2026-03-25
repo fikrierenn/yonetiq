@@ -171,7 +171,7 @@ public class AiMemoryService(IConfiguration config, AuditService auditService, I
             }
             await conn.ExecuteAsync(@"
                 UPDATE AiPatterns SET InputPattern=@InputPattern, ApprovedOutput=@ApprovedOutput,
-                       PatternType=@PatternType WHERE Id=@Id", pattern);
+                       PatternType=@PatternType, UpdatedAt=GETUTCDATE() WHERE Id=@Id", pattern);
             return pattern.Id;
         });
     }

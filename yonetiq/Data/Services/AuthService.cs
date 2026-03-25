@@ -142,7 +142,7 @@ public class AuthService(IConfiguration configuration, AuditService auditService
         var updateResult = await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE Users SET PasswordHash = @Hash, PasswordSalt = @Salt WHERE Id = @Id",
+                "UPDATE Users SET PasswordHash = @Hash, PasswordSalt = @Salt, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Hash = newHash, Salt = newSalt, Id = userId });
         });
 
@@ -180,7 +180,7 @@ public class AuthService(IConfiguration configuration, AuditService auditService
         await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE Users SET PasswordResetToken = @Token, PasswordResetExpiry = @Expiry WHERE Id = @Id",
+                "UPDATE Users SET PasswordResetToken = @Token, PasswordResetExpiry = @Expiry, UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                 new { Token = token, Expiry = expiry, Id = user.Id });
         });
 
@@ -221,7 +221,8 @@ public class AuthService(IConfiguration configuration, AuditService auditService
                     PasswordHash = @Hash,
                     PasswordSalt = @Salt,
                     PasswordResetToken  = NULL,
-                    PasswordResetExpiry = NULL
+                    PasswordResetExpiry = NULL,
+                    UpdatedAt = GETUTCDATE()
                 WHERE Id = @Id",
                 new { Hash = newHash, Salt = newSalt, Id = user.Id });
         });

@@ -6,9 +6,45 @@ namespace YonetIQ.Data.Services.AI;
 /// Prompt şablonlarını diskten veya embedded resource'lardan yükler ve değişken yerleştirmesi yapar.
 /// Yüklenen şablonlar bellekte önbelleğe alınır. Prompt dosyaları isteğe bağlı versiyon başlığı içerebilir.
 /// </summary>
-public class PromptEngine(IWebHostEnvironment env, ILogger<PromptEngine> logger)
+public class PromptEngine : IDisposable
 {
+    private readonly IWebHostEnvironment env;
+    private readonly ILogger<PromptEngine> logger;
     private readonly ConcurrentDictionary<string, (int Version, string Content)> _cache = new();
+    private readonly FileSystemWatcher? _watcher;
+
+    public PromptEngine(IWebHostEnvironment env, ILogger<PromptEngine> logger)
+    {
+        this.env = env;
+        this.logger = logger;
+
+        // Hot-reload: prompt dosyaları değiştiğinde cache'i temizle
+        var promptDir = Path.Combine(env.ContentRootPath, "Data", "AiSkills", "Prompts");
+        if (Directory.Exists(promptDir))
+        {
+            _watcher = new FileSystemWatcher(promptDir, "*.md")
+            {
+                NotifyFilter = NotifyFilters.LastWrite | NotifyFilters.FileName,
+                EnableRaisingEvents = true
+            };
+            _watcher.Changed += OnPromptFileChanged;
+            _watcher.Created += OnPromptFileChanged;
+            _watcher.Renamed += (_, e) => OnPromptFileChanged(null, e);
+        }
+    }
+
+    private void OnPromptFileChanged(object? sender, FileSystemEventArgs e)
+    {
+        var fileName = Path.GetFileName(e.FullPath);
+        if (_cache.TryRemove(fileName, out _))
+            logger.LogInformation("Prompt cache invalidated: {FileName}", fileName);
+    }
+
+    public void Dispose()
+    {
+        _watcher?.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     /// <summary>
     /// Belirtilen dosya adı ile prompt şablonunu yükler.
@@ -17,6 +53,19 @@ public class PromptEngine(IWebHostEnvironment env, ILogger<PromptEngine> logger)
     /// </summary>
     public async Task<string> LoadPromptAsync(string fileName)
     {
+        // Development'ta cache bypass — prompt düzenlerken anında yansısın
+        if (env.IsDevelopment())
+        {
+            var devPath = Path.Combine(env.ContentRootPath, "Data", "AiSkills", "Prompts", fileName);
+            if (File.Exists(devPath))
+            {
+                var raw = await File.ReadAllTextAsync(devPath);
+                var (version, content) = ParseVersionHeader(raw);
+                _cache[fileName] = (version, content);
+                return content;
+            }
+        }
+
         if (_cache.TryGetValue(fileName, out var cached))
             return cached.Content;
 

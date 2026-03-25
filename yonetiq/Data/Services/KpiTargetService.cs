@@ -54,7 +54,8 @@ public class KpiTargetService(IConfiguration config, AuditService auditSvc) : Ba
                         TargetValue = @TargetValue,
                         Operator    = @Operator,
                         PeriodType  = @PeriodType,
-                        IsActive    = @IsActive
+                        IsActive    = @IsActive,
+                        UpdatedAt   = GETUTCDATE()
                     WHERE Id = @Id", target);
                 LogAction("KpiTarget", "Update", new { UserId = userId, Label = target.Label, Id = target.Id });
                 return target.Id;

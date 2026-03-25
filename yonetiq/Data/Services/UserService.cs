@@ -95,11 +95,12 @@ public class UserService(IConfiguration config, AuditService auditService) : Bas
                 {
                     var sql = @"
                         UPDATE Users
-                        SET FullName = @FullName, 
-                            Email = @Email, 
-                            RoleLookupId = @RoleLookupId, 
-                            IsActive = @IsActive, 
-                            DepartmentLookupId = @DepartmentLookupId
+                        SET FullName = @FullName,
+                            Email = @Email,
+                            RoleLookupId = @RoleLookupId,
+                            IsActive = @IsActive,
+                            DepartmentLookupId = @DepartmentLookupId,
+                            UpdatedAt = GETUTCDATE()
                         WHERE Id = @Id";
                     await conn.ExecuteAsync(sql, user);
                     resultId = user.Id;
@@ -119,7 +120,7 @@ public class UserService(IConfiguration config, AuditService auditService) : Bas
         return await ExecuteServiceAsync(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE Users SET TelegramChatId = @ChatId WHERE Id = @UserId",
+                "UPDATE Users SET TelegramChatId = @ChatId, UpdatedAt = GETUTCDATE() WHERE Id = @UserId",
                 new { ChatId = chatId, UserId = userId });
             LogAction("User", "UpdateTelegram", new { UserId = userId, Linked = chatId is not null });
         });

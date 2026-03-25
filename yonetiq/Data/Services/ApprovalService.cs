@@ -101,14 +101,14 @@ public class ApprovalService(IConfiguration config, AuditService auditSvc) : Bas
                 throw new InvalidOperationException("Onay adımı bulunamadı.");
 
             await conn.ExecuteAsync(@"
-                UPDATE ApprovalSteps SET Status = @Action, Comment = @Comment, ActionAt = GETUTCDATE()
+                UPDATE ApprovalSteps SET Status = @Action, Comment = @Comment, ActionAt = GETUTCDATE(), UpdatedAt = GETUTCDATE()
                 WHERE Id = @Id",
                 new { Action = action, Comment = comment, Id = step.Id });
 
             if (action == "Rejected")
             {
                 await conn.ExecuteAsync(
-                    "UPDATE ApprovalRequests SET Status = 'Rejected' WHERE Id = @Id",
+                    "UPDATE ApprovalRequests SET Status = 'Rejected', UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                     new { Id = requestId });
             }
             else
@@ -122,7 +122,7 @@ public class ApprovalService(IConfiguration config, AuditService auditSvc) : Bas
                 if (nextStep is null)
                 {
                     await conn.ExecuteAsync(
-                        "UPDATE ApprovalRequests SET Status = 'Approved' WHERE Id = @Id",
+                        "UPDATE ApprovalRequests SET Status = 'Approved', UpdatedAt = GETUTCDATE() WHERE Id = @Id",
                         new { Id = requestId });
                 }
             }
@@ -154,7 +154,7 @@ public class ApprovalService(IConfiguration config, AuditService auditSvc) : Bas
         return await ExecuteServiceAsync<bool>(async conn =>
         {
             await conn.ExecuteAsync(
-                "UPDATE ApprovalRequests SET Status = 'Cancelled' WHERE Id = @Id AND RequestedBy = @UserId",
+                "UPDATE ApprovalRequests SET Status = 'Cancelled', UpdatedAt = GETUTCDATE() WHERE Id = @Id AND RequestedBy = @UserId",
                 new { Id = requestId, UserId = userId });
             LogAction("ApprovalRequest", "Cancel", $"#{requestId}");
             return true;

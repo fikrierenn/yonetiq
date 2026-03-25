@@ -1,6 +1,7 @@
 @page "/ayarlar/kpi-hedefleri"
 @inject KpiTargetService KpiSvc
 @inject SessionService SessionSvc
+@inject NavigationManager Nav
 @inject IToastService Toast
 
 <PageTitle>KPI Hedef Değerleri</PageTitle>
@@ -158,7 +159,12 @@ else
     private List<KpiTarget> _items = [];
     private KpiTarget _editItem = new();
 
-    protected override async Task OnInitializedAsync() => await LoadAsync();
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionSvc.IsLoggedIn) { Nav.NavigateTo("/giris"); return; }
+        if (SessionSvc.ActiveUser?.Role != "Genel Müdür") { Nav.NavigateTo("/"); return; }
+        await LoadAsync();
+    }
 
     private async Task LoadAsync()
     {

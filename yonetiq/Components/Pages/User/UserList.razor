@@ -1,6 +1,8 @@
 @page "/kullanicilar"
 @inject UserService UserSvc
 @inject LookupService LookupSvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
 @inject IToastService Toast
 
 @* 
@@ -158,7 +160,8 @@
 
     protected override async Task OnInitializedAsync()
     {
-        // Sayfa açıldığında mevcut kullanıcıları yükle
+        if (!SessionSvc.IsLoggedIn) { Nav.NavigateTo("/giris"); return; }
+        if (SessionSvc.ActiveUser?.Role != "Genel Müdür") { Nav.NavigateTo("/"); return; }
         await LoadAsync();
     }
 

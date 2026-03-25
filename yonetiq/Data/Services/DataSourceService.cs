@@ -116,7 +116,7 @@ public class DataSourceService : BaseService
         {
             // Tekil varsayılan kuralı: bu kayıt varsayılan yapılıyorsa diğerlerini sıfırla
             if (ds.IsDefault)
-                await conn.ExecuteAsync("UPDATE DataSources SET IsDefault = 0");
+                await conn.ExecuteAsync("UPDATE DataSources SET IsDefault = 0, UpdatedAt = GETUTCDATE()");
 
             int resultId;
             if (ds.Id == 0)

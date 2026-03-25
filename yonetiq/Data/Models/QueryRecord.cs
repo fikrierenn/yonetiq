@@ -69,11 +69,6 @@ public class QueryRecord : BaseEntity
     public int? DataSourceId { get; set; }
 
     /// <summary>
-    /// Rapor tanımında veya SQL kodunda son yapılan değişikliğin (update) tarih damgası.
-    /// </summary>
-    public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
-
-    /// <summary>
     /// True ise INSERT/UPDATE/DELETE/MERGE komutlarının bu sorgunun SQL içeriğinde
     /// çalıştırılmasına izin verilir (DML/Uzman Modu).
     /// DDL komutları (DROP, TRUNCATE, ALTER vb.) her zaman engellenir.
