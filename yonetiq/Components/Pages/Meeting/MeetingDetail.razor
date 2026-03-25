@@ -7,8 +7,15 @@
 @inject LookupService LookupSvc
 @inject IToastService Toast
 @inject NavigationManager Nav
+@inject YonetIQ.Data.Services.AI.AiOrchestrationService AiOrchestration
+@inject SessionService SessionSvc
 
 <PageTitle>Toplantı Detayı - @(_meeting?.Title ?? "Yükleniyor")</PageTitle>
+
+@if (_prepResponse is not null && _prepResponse.IsSuccess)
+{
+    <SkillResultCard Response="_prepResponse" UserId="@SessionSvc.ActiveUser.UserId" />
+}
 
 @if (_isLoading)
 {
@@ -89,6 +96,7 @@ else
     private List<Lookup> _priorities = [];
     private Decision _newDecision = new();
     private int? _expandedDecisionId;
+    private YonetIQ.Data.Models.AI.AiResponse? _prepResponse;
 
     protected override async Task OnInitializedAsync()
     {
@@ -100,6 +108,27 @@ else
         _newDecision.PriorityLookupId = _priorities.FirstOrDefault(p => p.Value == "Normal")?.Id;
         await LoadDecisionsAsync();
         _isLoading = false;
+
+        // WP13: Toplantı 4 saat içindeyse otomatik hazırlık
+        if (_meeting is not null && SessionSvc.IsLoggedIn)
+        {
+            var hoursUntil = (_meeting.MeetingDate - DateTime.UtcNow).TotalHours;
+            if (hoursUntil is > 0 and <= 4)
+            {
+                _ = Task.Run(async () =>
+                {
+                    var req = new YonetIQ.Data.Models.AI.AiRequest
+                    {
+                        SkillId = "meeting.preparation",
+                        UserId = SessionSvc.ActiveUser.UserId,
+                        Module = "meeting",
+                        Parameters = new() { ["entityId"] = Id }
+                    };
+                    _prepResponse = await AiOrchestration.ProcessRequestAsync(req);
+                    await InvokeAsync(StateHasChanged);
+                });
+            }
+        }
     }
 
     private async Task LoadDecisionsAsync() => _decisions = (await MeetingSvc.ListDecisionsAsync(Id)).Data ?? [];
