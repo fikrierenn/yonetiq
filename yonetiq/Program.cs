@@ -173,6 +173,26 @@ if (app.Environment.IsDevelopment() &&
 app.MapRazorComponents<App>()
     .AddInteractiveServerRenderMode();
 
+// WP12.3 — Health check endpoint
+app.MapGet("/health", async (AppDbContext db, YonetIQ.Data.Services.AI.SkillRegistry registry) =>
+{
+    try
+    {
+        await db.Database.CanConnectAsync();
+        return Results.Ok(new
+        {
+            status = "ok",
+            db = "connected",
+            skills = registry.Count,
+            time = DateTime.UtcNow
+        });
+    }
+    catch (Exception ex)
+    {
+        return Results.Problem($"DB bağlantı hatası: {ex.Message}");
+    }
+});
+
 app.Run();
 
 static string? FindFileInParents(string startDirectory, string fileName)

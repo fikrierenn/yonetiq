@@ -45,6 +45,18 @@ public class SkillRegistry(ILogger<SkillRegistry> logger)
         return query.ToList();
     }
 
+    /// <summary>Kayıtlı skill sayısı.</summary>
+    public int Count => _skills.Count;
+
+    /// <summary>Skill'i devre dışı bırakır (registry'den kaldırır).</summary>
+    public bool Disable(string skillId)
+    {
+        var removed = _skills.TryRemove(skillId, out _);
+        if (removed)
+            logger.LogInformation("Skill disabled: {SkillId}", skillId);
+        return removed;
+    }
+
     /// <summary>
     /// Kayıtlı tüm skill tanımlarını döndürür.
     /// </summary>

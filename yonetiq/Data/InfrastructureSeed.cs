@@ -778,4 +778,207 @@ UPDATE Users SET FullName = N'Operasyon Müdürü' WHERE FullName = 'Operasyon M
         CREATE INDEX IX_AiPatterns_SkillId ON AiPatterns (SkillId);
     END");
     }
+
+    // ── WP1: Faz 2 — Yeni Tablolar ve Genişletmeler ──────────────────────────
+
+    /// <summary>WP1.1 — Skill tanımlarını DB'de saklayan tablo (SkillPersistenceService için)</summary>
+    private static async Task PrepareAiSkillDefinitionsAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AiSkillDefinitions')
+    BEGIN
+        CREATE TABLE AiSkillDefinitions (
+            Id                    INT IDENTITY(1,1) PRIMARY KEY,
+            SkillId               NVARCHAR(100) NOT NULL,
+            Name                  NVARCHAR(200) NOT NULL,
+            Description           NVARCHAR(500) NULL,
+            Module                NVARCHAR(50) NOT NULL DEFAULT '',
+            Category              NVARCHAR(50) NOT NULL DEFAULT '',
+            TriggerMode           NVARCHAR(20) NOT NULL DEFAULT 'Reactive',
+            Temperature           DECIMAL(3,2) NOT NULL DEFAULT 0.2,
+            MaxTokenInput         INT NOT NULL DEFAULT 4000,
+            MaxOutputLength       INT NOT NULL DEFAULT 1500,
+            SystemPromptOverride  NVARCHAR(MAX) NULL,
+            UserPromptOverride    NVARCHAR(MAX) NULL,
+            IsEnabled             BIT NOT NULL DEFAULT 1,
+            Version               INT NOT NULL DEFAULT 1,
+            UpdatedBy             INT NULL,
+            UpdatedAt             DATETIME2 NULL,
+            CreatedAt             DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+            CONSTRAINT UQ_AiSkillDef_SkillId UNIQUE (SkillId)
+        );
+        CREATE INDEX IX_AiSkillDef_Module ON AiSkillDefinitions (Module);
+    END");
+    }
+
+    /// <summary>WP1.2 — Öğrenme sinyallerini kaydeden tablo (LearningSignalService için)</summary>
+    private static async Task PrepareAiPatternSignalsAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AiPatternSignals')
+    BEGIN
+        CREATE TABLE AiPatternSignals (
+            Id                    INT IDENTITY(1,1) PRIMARY KEY,
+            PatternId             INT NOT NULL,
+            SignalType            NVARCHAR(30) NOT NULL,
+            Weight                DECIMAL(4,1) NOT NULL DEFAULT 0,
+            UserId                INT NULL,
+            SourceInteractionId   INT NULL,
+            Notes                 NVARCHAR(500) NULL,
+            CreatedAt             DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+            CONSTRAINT FK_PatternSignal_Pattern FOREIGN KEY (PatternId) REFERENCES AiPatterns(Id) ON DELETE CASCADE
+        );
+        CREATE INDEX IX_AiPatternSignals_PatternId ON AiPatternSignals (PatternId);
+        CREATE INDEX IX_AiPatternSignals_Type ON AiPatternSignals (SignalType);
+    END");
+    }
+
+    /// <summary>WP1.3 — AiPatterns tablosuna öğrenme sistemi kolonları</summary>
+    private static async Task PrepareAiPatternsExtensionsAsync(SqlConnection conn)
+    {
+        var extensions = new (string Column, string Definition)[]
+        {
+            ("ConfidenceScore", "DECIMAL(5,2) NOT NULL DEFAULT 0"),
+            ("ApprovalStatus", "NVARCHAR(20) NOT NULL DEFAULT 'Pending'"),
+            ("DecayedAt", "DATETIME2 NULL"),
+            ("IsCorrectionDerived", "BIT NOT NULL DEFAULT 0"),
+            ("ProposedByUserId", "INT NULL"),
+            ("SourceInteractionId", "INT NULL"),
+            ("ApprovedAt", "DATETIME2 NULL")
+        };
+        foreach (var (col, def) in extensions)
+        {
+            await conn.ExecuteAsync($@"
+                IF COL_LENGTH('dbo.AiPatterns', '{col}') IS NULL
+                    ALTER TABLE AiPatterns ADD {col} {def}");
+        }
+    }
+
+    /// <summary>WP1.4 — Semantik terim keşif adayları (SemanticDiscoveryService için)</summary>
+    private static async Task PrepareSemanticLearningCandidatesAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'SemanticLearningCandidates')
+    BEGIN
+        CREATE TABLE SemanticLearningCandidates (
+            Id                INT IDENTITY(1,1) PRIMARY KEY,
+            Term              NVARCHAR(200) NOT NULL,
+            DetectedInSkillId NVARCHAR(100) NULL,
+            DetectedInInput   NVARCHAR(500) NULL,
+            Frequency         INT NOT NULL DEFAULT 1,
+            ProposedDefinition NVARCHAR(500) NULL,
+            Status            NVARCHAR(20) NOT NULL DEFAULT 'Pending',
+            ReviewedBy        INT NULL,
+            ReviewedAt        DATETIME2 NULL,
+            CreatedAt         DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+        );
+        CREATE INDEX IX_SemanticCandidate_Status ON SemanticLearningCandidates (Status);
+        CREATE INDEX IX_SemanticCandidate_Term ON SemanticLearningCandidates (Term);
+    END");
+    }
+
+    /// <summary>WP1.5 — AI sorgu denetim kaydı (tam izlenebilirlik)</summary>
+    private static async Task PrepareAiQueryLogAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AiQueryLog')
+    BEGIN
+        CREATE TABLE AiQueryLog (
+            Id              INT IDENTITY(1,1) PRIMARY KEY,
+            UserId          INT NOT NULL,
+            SkillId         NVARCHAR(100) NOT NULL,
+            InputText       NVARCHAR(1000) NOT NULL,
+            OutputText      NVARCHAR(MAX) NULL,
+            GeneratedSql    NVARCHAR(MAX) NULL,
+            ExecutedSql     NVARCHAR(MAX) NULL,
+            WasEdited       BIT NOT NULL DEFAULT 0,
+            DurationMs      INT NOT NULL DEFAULT 0,
+            Provider        NVARCHAR(30) NULL,
+            TokenCount      INT NOT NULL DEFAULT 0,
+            CreatedAt       DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+        );
+        CREATE INDEX IX_AiQueryLog_UserId ON AiQueryLog (UserId);
+        CREATE INDEX IX_AiQueryLog_SkillId ON AiQueryLog (SkillId);
+        CREATE INDEX IX_AiQueryLog_CreatedAt ON AiQueryLog (CreatedAt DESC);
+    END");
+    }
+
+    /// <summary>WP1.6 — Çok turlu sohbet bağlamı (ConversationContextService için)</summary>
+    private static async Task PrepareAiConversationContextAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AiConversationContext')
+    BEGIN
+        CREATE TABLE AiConversationContext (
+            Id              INT IDENTITY(1,1) PRIMARY KEY,
+            SessionKey      NVARCHAR(200) NOT NULL,
+            UserId          INT NOT NULL,
+            TurnIndex       INT NOT NULL DEFAULT 0,
+            SkillId         NVARCHAR(100) NULL,
+            UserInput       NVARCHAR(1000) NOT NULL,
+            AiOutput        NVARCHAR(MAX) NULL,
+            CreatedAt       DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+        );
+        CREATE INDEX IX_AiConvCtx_Session ON AiConversationContext (SessionKey, TurnIndex);
+        CREATE INDEX IX_AiConvCtx_UserId ON AiConversationContext (UserId);
+    END");
+    }
+
+    /// <summary>WP1.7 — Skill tetikleme denetim kaydı</summary>
+    private static async Task PrepareAiSkillTriggerLogAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'AiSkillTriggerLog')
+    BEGIN
+        CREATE TABLE AiSkillTriggerLog (
+            Id              INT IDENTITY(1,1) PRIMARY KEY,
+            SkillId         NVARCHAR(100) NOT NULL,
+            TriggerSource   NVARCHAR(30) NOT NULL DEFAULT 'Manual',
+            UserId          INT NOT NULL,
+            Module          NVARCHAR(50) NULL,
+            WasExecuted     BIT NOT NULL DEFAULT 1,
+            DurationMs      INT NOT NULL DEFAULT 0,
+            IsSuccess       BIT NOT NULL DEFAULT 1,
+            CreatedAt       DATETIME2 NOT NULL DEFAULT GETUTCDATE()
+        );
+        CREATE INDEX IX_AiSkillTrigger_SkillId ON AiSkillTriggerLog (SkillId);
+        CREATE INDEX IX_AiSkillTrigger_CreatedAt ON AiSkillTriggerLog (CreatedAt DESC);
+    END");
+    }
+
+    /// <summary>WP1.8 — Kullanıcı dashboard tercihleri</summary>
+    private static async Task PrepareUserDashboardPreferencesAsync(SqlConnection conn)
+    {
+        await conn.ExecuteAsync(@"
+    IF NOT EXISTS (SELECT 1 FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_NAME = 'UserDashboardPreferences')
+    BEGIN
+        CREATE TABLE UserDashboardPreferences (
+            Id              INT IDENTITY(1,1) PRIMARY KEY,
+            UserId          INT NOT NULL,
+            QuerySetId      INT NOT NULL,
+            DisplayOrder    INT NOT NULL DEFAULT 0,
+            IsVisible       BIT NOT NULL DEFAULT 1,
+            CreatedAt       DATETIME2 NOT NULL DEFAULT GETUTCDATE(),
+            CONSTRAINT FK_UDP_Users FOREIGN KEY (UserId) REFERENCES Users(Id),
+            CONSTRAINT UQ_UDP UNIQUE (UserId, QuerySetId)
+        );
+    END");
+    }
+
+    /// <summary>WP1.9 — Decisions tablosuna AI/risk kolonları</summary>
+    private static async Task PrepareDecisionExtensionsAsync(SqlConnection conn)
+    {
+        var extensions = new (string Column, string Definition)[]
+        {
+            ("RiskLevel", "NVARCHAR(20) NULL"),
+            ("Impact", "NVARCHAR(500) NULL"),
+            ("FollowUpDate", "DATETIME2 NULL")
+        };
+        foreach (var (col, def) in extensions)
+        {
+            await conn.ExecuteAsync($@"
+                IF COL_LENGTH('dbo.Decisions', '{col}') IS NULL
+                    ALTER TABLE Decisions ADD {col} {def}");
+        }
+    }
 }

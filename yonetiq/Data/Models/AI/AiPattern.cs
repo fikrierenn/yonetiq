@@ -18,4 +18,16 @@ public class AiPattern
     public DateTime? LastUsedAt { get; set; }
     public int? ApprovedBy { get; set; }
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+
+    // WP1.3 — Öğrenme sistemi genişletmeleri
+    public decimal ConfidenceScore { get; set; }
+
+    /// <summary>Pending, Approved, Rejected</summary>
+    public string ApprovalStatus { get; set; } = "Pending";
+
+    public DateTime? DecayedAt { get; set; }
+    public bool IsCorrectionDerived { get; set; }
+    public int? ProposedByUserId { get; set; }
+    public int? SourceInteractionId { get; set; }
+    public DateTime? ApprovedAt { get; set; }
 }

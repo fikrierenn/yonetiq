@@ -55,6 +55,17 @@ public static partial class SeedData
         await PrepareSemanticDefinitionsAsync(conn);
         await PrepareAiPatternsAsync(conn);
 
+        // WP1: Faz 2 — Yeni tablolar ve genişletmeler
+        await PrepareAiSkillDefinitionsAsync(conn);
+        await PrepareAiPatternSignalsAsync(conn);
+        await PrepareAiPatternsExtensionsAsync(conn);
+        await PrepareSemanticLearningCandidatesAsync(conn);
+        await PrepareAiQueryLogAsync(conn);
+        await PrepareAiConversationContextAsync(conn);
+        await PrepareAiSkillTriggerLogAsync(conn);
+        await PrepareUserDashboardPreferencesAsync(conn);
+        await PrepareDecisionExtensionsAsync(conn);
+
         // Veri Tohumlama (DataSeed.cs)
         await SeedLookupsAsync(conn);
         await SeedUsersAsync(conn);
