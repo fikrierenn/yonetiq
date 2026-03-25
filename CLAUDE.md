@@ -5,6 +5,7 @@
 > INDEX'ten sadece görevle ilgili domain dosyalarını oku — hepsini değil (token tasarrufu).
 > **UNIFIED PLAN:** `D:/Dev/yonet/YONETIQ_UNIFIED_MASTER.md` — ana plan.
 > **FINAL PRECODE:** `D:/Dev/yonet/YONETIQ_FINAL_PRECODE.md` — 55 adım, 9 faz. Faz 1 tamamlandı, Faz 2 adım 10'dan devam.
+> **SCHEMA DISCOVERY:** `D:/Dev/yonet/YONETIQ_SCHEMA_DISCOVERY.md` — BKM Kitap DB şema keşif protokolü.
 > **SKILL:** `.claude/skills/yonetiq-platform/SKILL.md` — proje bilgi tabanı.
 
 ## Memory Sistemi (Hiyerarşik Context Architecture)
