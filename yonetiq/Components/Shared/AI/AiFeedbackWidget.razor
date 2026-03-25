@@ -1,16 +1,17 @@
-@* AI ciktisi altinda gosterilen geri bildirim widget'i *@
+@* AI çıktısı altında gösterilen geri bildirim widget'i — WP6: öğrenme sinyalleri entegrasyonu *@
 @using YonetIQ.Data.Services.AI
 @using YonetIQ.Data.Models.AI
 @inject AiOrchestrationService AiOrchestration
+@inject LearningSignalService SignalSvc
 
 <div class="yi-ai-feedback d-flex align-items-center gap-2 mt-2">
     @if (!_submitted)
     {
-        <span class="yi-ai-feedback-label">Bu faydali miydi?</span>
-        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedback(3, true)" title="Faydali">
+        <span class="yi-ai-feedback-label">Bu faydalı mıydı?</span>
+        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedbackAsync(3, true)" title="Faydalı">
             <i class="bi bi-hand-thumbs-up"></i>
         </button>
-        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedback(1, false)" title="Faydasiz">
+        <button class="btn btn-sm yi-btn-ghost" @onclick="() => SubmitFeedbackAsync(1, false)" title="Faydasız">
             <i class="bi bi-hand-thumbs-down"></i>
         </button>
     }
@@ -25,11 +26,13 @@
 @code {
     [Parameter] public int InteractionId { get; set; }
     [Parameter] public int UserId { get; set; }
+    [Parameter] public int? PatternId { get; set; }
 
     private bool _submitted;
 
-    private async Task SubmitFeedback(int rating, bool accepted)
+    private async Task SubmitFeedbackAsync(int rating, bool accepted)
     {
+        // Mevcut feedback kaydet
         var feedback = new AiFeedback
         {
             InteractionId = InteractionId,
@@ -38,6 +41,16 @@
             WasAccepted = accepted
         };
         await AiOrchestration.SubmitFeedbackAsync(feedback);
+
+        // WP6: Öğrenme sinyali gönder (pattern varsa)
+        if (PatternId.HasValue && PatternId.Value > 0)
+        {
+            var signalType = accepted ? "ThumbsUp" : "ThumbsDown";
+            var weight = accepted ? 3.0m : -5.0m;
+            _ = SignalSvc.RecordSignalAsync(
+                PatternId.Value, signalType, weight, UserId, InteractionId);
+        }
+
         _submitted = true;
     }
 }
