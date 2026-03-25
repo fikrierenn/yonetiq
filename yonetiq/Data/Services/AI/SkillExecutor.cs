@@ -135,7 +135,7 @@ public class SkillExecutor(
     /// Skill ve bağlamdan template değişkenlerini oluşturur.
     /// Entity nesnelerini prompt değişkenlerine düzleştirir (TaskItem → taskTitle, taskDescription vb.)
     /// </summary>
-    private static Dictionary<string, string> BuildVariables(SkillDefinition skill, SkillContext context)
+    internal static Dictionary<string, string> BuildVariables(SkillDefinition skill, SkillContext context)
     {
         var vars = new Dictionary<string, string>
         {

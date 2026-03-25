@@ -49,6 +49,8 @@ public class ContextBuilderServiceTests
             new OkrService(config, auditSvc),
             new KpiTargetService(config, auditSvc),
             new SemanticService(config, auditSvc),
+            new SemanticEnricher(new SemanticService(config, auditSvc)),
+            new ConversationContextService(config, auditSvc, NullLogger<ConversationContextService>.Instance),
             NullLogger<ContextBuilderService>.Instance);
     }
 

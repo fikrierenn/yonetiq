@@ -146,10 +146,11 @@ public class AiMemoryService(IConfiguration config, AuditService auditService, I
         {
             var result = await conn.QueryAsync<AiPattern>(@"
                 SELECT TOP (@limit) Id, SkillId, PatternType, InputPattern, ApprovedOutput,
-                       UsageCount, LastUsedAt, ApprovedBy, CreatedAt
+                       UsageCount, LastUsedAt, ApprovedBy, CreatedAt, ConfidenceScore, ApprovalStatus
                 FROM AiPatterns
                 WHERE SkillId = @skillId
-                ORDER BY UsageCount DESC, CreatedAt DESC",
+                  AND (ApprovalStatus = 'Approved' OR ConfidenceScore >= 8.0)
+                ORDER BY ConfidenceScore DESC, UsageCount DESC, CreatedAt DESC",
                 new { skillId, limit });
             return result.ToList();
         });

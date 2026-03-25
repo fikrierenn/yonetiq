@@ -22,6 +22,8 @@ public class ContextBuilderService(
     OkrService okrSvc,
     KpiTargetService kpiTargetSvc,
     SemanticService semanticSvc,
+    SemanticEnricher semanticEnricher,
+    ConversationContextService conversationSvc,
     ILogger<ContextBuilderService> logger)
 {
     // İleride kullanılacak servisler — CS9113 suppress
@@ -95,6 +97,21 @@ public class ContextBuilderService(
 
             // Permission-aware: rol bazlı bağlam filtresi
             ApplyPermissionFilter(context);
+
+            // WP5: Semantik zenginleştirme — iş terimlerini çözümle
+            if (!string.IsNullOrWhiteSpace(request.UserInput))
+            {
+                var enrichment = await semanticEnricher.EnrichAsync(request.UserInput);
+                if (!string.IsNullOrEmpty(enrichment))
+                    context.ContextData["semantic_glossary"] = enrichment;
+            }
+
+            // WP5: Sohbet geçmişi — önceki turları ekle
+            var sessionKey = request.Parameters?.GetValueOrDefault("sessionKey")?.ToString()
+                ?? $"user_{activeUser.UserId}";
+            var conversationHistory = await conversationSvc.BuildContextSummaryAsync(sessionKey);
+            if (!string.IsNullOrEmpty(conversationHistory))
+                context.ContextData["conversation_history"] = conversationHistory;
 
             // Tahmini token sayısını hesapla (basit: karakter/4)
             var totalChars = context.Entities.Values

@@ -12,6 +12,8 @@ public class AiOrchestrationService(
     ContextBuilderService contextBuilder,
     SkillExecutor skillExecutor,
     AiMemoryService memoryService,
+    ConversationContextService conversationSvc,
+    SemanticDiscoveryService semanticDiscoverySvc,
     ILogger<AiOrchestrationService> logger)
 {
     /// <summary>
@@ -102,6 +104,20 @@ public class AiOrchestrationService(
         if (saveResult is { IsSuccess: true, Data: var interactionId })
         {
             response.InteractionId = interactionId;
+        }
+
+        // WP5: Sohbet bağlamını kaydet
+        var sessionKey = request.Parameters?.GetValueOrDefault("sessionKey")?.ToString()
+            ?? $"user_{request.UserId}";
+        _ = conversationSvc.SaveTurnAsync(
+            sessionKey, request.UserId,
+            request.UserInput ?? skill.Name,
+            response.Content, skill.Id);
+
+        // WP5: Yeni semantik terim keşfi (arka plan, hata yutulur)
+        if (!string.IsNullOrWhiteSpace(request.UserInput))
+        {
+            _ = semanticDiscoverySvc.DiscoverFromInputAsync(request.UserInput, skill.Id);
         }
 
         return response;
