@@ -695,7 +695,7 @@ public class AiQualityTestService(
             }
 
             // Her insight'ta zorunlu alanlar dolu mu?
-            var allFieldsValid = insights.All(i =>
+            var allFieldsValid = (insights ?? []).All(i =>
                 !string.IsNullOrWhiteSpace(i.Title) &&
                 !string.IsNullOrWhiteSpace(i.Module) &&
                 !string.IsNullOrWhiteSpace(i.Icon));

@@ -1,0 +1,4 @@
+{
+  "Connection": "Server=localhost;Database=YonetDB;Trusted_Connection=True;TrustServerCertificate=True;",
+  "SqlDir": "./docs/sql"
+}

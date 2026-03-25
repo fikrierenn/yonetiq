@@ -1,0 +1,661 @@
+Elimde mevcut repo dosyaları, ekran görüntüleri, mimari notlar veya kod parçaları varsa bunları temel bağlam olarak kullan; greenfield varsayımıyla hareket etme.
+
+Sen principal software architect, AI systems designer, product strategist, enterprise platform thinker ve delivery-governance lead gibi davranacaksın.
+
+Mevcut bir yönetim portalı ürünü olan YonetIQ’yi, mevcut ürün kimliğini bozmadan çok daha AI-first, AI-visible ve AI-driven bir yapıya dönüştürmem konusunda bana yardımcı olmanı istiyorum.
+
+ÖNEMLİ STRATEJİK KARAR:
+- YonetIQ ayrı bir ürün olarak kalmalı.
+- Şu anda YonetIQ’yi tamamen ayrı bir AI motoru ürününe dönüştürmüyoruz.
+- Tüm ürünü hemen genel amaçlı bir platforma çevirmiyoruz.
+- Kontrolsüz bir full rewrite yapmıyoruz.
+- Bunun yerine YonetIQ’yi bir yönetim portalı olarak koruyup ciddi şekilde iyileştirmek ve AI tarafını çok daha merkezi, görünür, faydalı ve operasyonel olarak değer üreten hale getirmek istiyoruz.
+- Gelecekte bazı iç katmanlar, gerçekten gerekirse servisleştirilebilir veya dışarı alınabilir; ancak bu birinci hedef değil.
+- Asıl yakın hedef: YonetIQ’yi “bazı AI özellikleri olan portal” yapısından çıkarıp “AI-first yönetim çalışma alanı” haline getirmek.
+
+Pragmatik, kıdemli, kurumsal ölçekte düşünen bir bakış açısıyla yaklaş.
+Yüzeysel “chatbot ekleyin” tavsiyeleri verme.
+Gimmick seviyesinde AI özellikleri önerme.
+Genel SaaS klişelerine kaçma.
+Ben mimari, ürün, UX ve AI sistemleri açısından derinlik istiyorum.
+
+==================================================
+1. ÜRÜN BAĞLAMI
+==================================================
+
+YonetIQ şu anda bir yönetim portalı / iç operasyon çalışma alanı.
+
+Fonksiyonel alanları kabaca şunlar:
+- dashboard / ana sayfa
+- görevler
+- toplantılar
+- notlar
+- raporlar
+- sorgular
+- onay süreçleri
+- OKR / yönetim takibi
+- veri kaynağı bağlantısı / veri sorgulama
+- bazı yerlerde AI destekli analiz
+
+Mevcut gerçeklik:
+- Ürün bir yönetim portalı olarak kalmalı.
+- Ciddi biçimde iyileştirilebilir.
+- AI tarafı kullanıcı tarafından çok daha baskın ve hissedilir hale gelmeli.
+- Kullanıcı sadece bir portal kullanıyormuş gibi değil, ona aktif şekilde düşünme, önceliklendirme, yorumlama ve aksiyon alma desteği veren akıllı bir yönetim çalışma alanı kullanıyormuş gibi hissetmeli.
+
+Hedef şu DEĞİL:
+- oyuncak chatbot
+- rastgele LLM wrapper
+- mevcut ekranların üstüne sonradan iliştirilmiş gösterişli asistan
+- erken mikroservis fantezisi
+- keskin ürün kimliği olmayan yatay ve genel bir platform
+
+Hedef şu:
+- ciddi bir AI-first yönetim ürünü
+- iş akışlarına derin entegre
+- bağlam farkındalığı olan
+- skill odaklı
+- analiz, özetleme, yorumlama, öneri ve operasyonel destek üretebilen
+- ileride daha derin AI intelligence katmanlarına uygun hale gelebilecek bir yapı
+
+==================================================
+2. ÖNEMLİ TASARIM POZİSYONU
+==================================================
+
+Şu stratejik pozisyona sadık kalmalısın:
+
+A) YonetIQ ayrı bir ürün olarak kalacak.
+B) Mimari iyileştirilebilir.
+C) AI daha görünür ve daha merkezi hale getirilebilir.
+D) Gelecekte bazı yeniden kullanılabilir yetenekler servis olarak açılabilir.
+E) Ama her şeyi körü körüne hemen servislere bölmemeliyiz.
+F) Dağıtık monolit oluşturmaktan kaçınmalıyız.
+G) Çok güçlü bir gerekçe yoksa “her şeyi sıfırdan yazalım” yaklaşımından kaçınmalıyız.
+H) Ürüne özgü kalan alanlarla ileride reusable infrastructure olabilecek alanları ayırmalıyız.
+
+Dolayısıyla görevin şu tür cevaplar vermek DEĞİL:
+- “sıfırdan yeni sistem kurun”
+- “her şeyi mikroservislere bölün”
+- “bir AI chat widget ekleyin”
+- “uygulamayı genel amaçlı bir analytics engine’e çevirin”
+
+Görevin, stratejik olarak keskin ve teknik olarak gerçekçi bir dönüşüm planı üretmek.
+
+==================================================
+3. TEMEL DÖNÜŞÜM HEDEFİ
+==================================================
+
+YonetIQ’nin şuradan evrilmesini istiyorum:
+
+“AI özellikleri olan yönetim portalı”
+
+şuraya:
+
+“AI-first yönetim çalışma alanı”
+
+Bu şu anlama geliyor:
+- AI kullanıcı deneyiminde görünür olmalı
+- AI tek bir sayfaya sıkışmamalı
+- AI iş akışlarının içine gömülü olmalı
+- AI sadece reaktif değil, proaktif de yardımcı olmalı
+- AI her modülün bağlamını anlamalı
+- AI ciddi bir işletim katmanı gibi hissedilmeli
+- AI yönetsel değer üretmeli:
+  - özetler
+  - risk tespiti
+  - aksiyon çıkarımı
+  - öneriler
+  - önceliklendirme
+  - analitik yorumlama
+  - sorgu/rapor açıklama
+  - karar desteği
+  - operasyonel netlik
+
+==================================================
+4. YONETIQ İÇİNDE AI NELER YAPMALI
+==================================================
+
+AI tarafı şu alanlarda çok daha güçlü hale gelmeli:
+
+A) Global AI komut yüzeyi
+- Uygulamanın her yerinden erişilebilen global bir komut çubuğu / copilot input alanı
+- Kullanıcı şunları diyebilmeli:
+  - bugünün önceliklerini özetle
+  - bu toplantıdan aksiyon çıkar
+  - bu raporu açıkla
+  - bekleyen onaylardaki riskleri bul
+  - bu notu görevlere dönüştür
+  - bu sorgu sonucunu analiz et
+  - ekip icrasındaki tıkanıklıkları göster
+- Bu, sistem genelinde tekil AI giriş noktası olmalı
+
+B) Ana sayfa / dashboard AI briefing
+Ana sayfa statik olmamalı.
+Bir AI briefing hub haline gelmeli:
+- bugün ne önemli
+- ne gecikti
+- ne riskli
+- ne dikkat istiyor
+- ne değişti
+- hangi kararlar bekliyor
+- mevcut kullanıcı için kişiselleştirilmiş özet
+- odaklanılması gereken alan önerileri
+
+C) Modül bazlı bağlamsal AI
+AI, kullanıcı hangi modüldeyse ona göre farklı davranmalı:
+
+Görev modülü:
+- görevi netleştir
+- teslim kriteri yaz
+- işi alt görevlere böl
+- risk tespit et
+- takip mesajı taslağı oluştur
+- tıkanıklıkları özetle
+
+Toplantı modülü:
+- toplantıyı özetle
+- kararları çıkar
+- aksiyonları çıkar
+- muhtemel sorumluları öner
+- çözümsüz kalan başlıkları tespit et
+- önceki toplantılarla karşılaştır
+
+Not modülü:
+- dağınık notları yapılandır
+- aksiyon maddeleri çıkar
+- notu toplantı gündemine dönüştür
+- notu görevlere dönüştür
+- yönetici özeti üret
+
+Rapor / sorgu / analitik modülü:
+- sorgu sonucunu açıkla
+- trendleri tespit et
+- anomalileri vurgula
+- sonraki soruları öner
+- yönetim özeti üret
+- dönem karşılaştırması yap
+- risk ve fırsatları çağır
+
+Onaylar / yönetsel gözetim:
+- bekleyen onayları özetle
+- darboğazları tespit et
+- sıra dışı onayları ortaya çıkar
+- aciliyet nedenini açıkla
+- önceliklendirme öner
+
+D) AI önerileri sadece buton tabanlı olmamalı
+Her yere “AI ile analiz et” butonu koymak ana strateji olmamalı.
+Bunun yerine:
+- AI bağlamsal öneriler sunmalı
+- bir sonraki aksiyonu önermeli
+- eksik yapıyı fark etmeli
+- anomalileri işaret etmeli
+- doğru anda kullanıcıyı dürtmeli
+
+==================================================
+5. SKILL TABANLI AI MODELİ
+==================================================
+
+Ben prompt karmaşası istemiyorum.
+
+Gerçek bir skill tabanlı AI mimarisi istiyorum.
+
+Bu sistem içinde “skill” nedir, bunu tanımla.
+
+Skill sadece bir prompt değildir.
+Bir skill şunları içermeli:
+- amaç
+- tetiklenme bağlamı
+- input şeması
+- output şeması
+- bağımlılıklar
+- ihtiyaç duyduğu entity / veri
+- guardrail’ler
+- confidence beklentisi
+- fallback davranışı
+- başarı kriteri
+- ölçülebilirlik / değerlendirilebilirlik
+
+YonetIQ için bir skill sistemi önermeni istiyorum.
+
+Olası skill kategorileri:
+- görev skill’leri
+- toplantı skill’leri
+- not skill’leri
+- rapor skill’leri
+- sorgu skill’leri
+- yönetici gözetim skill’leri
+- executive briefing skill’leri
+- öneri skill’leri
+- operasyonel risk skill’leri
+
+Her skill sınıfı için açıkla:
+- ne yapar
+- UI’da nerede görünür
+- hangi bağlama ihtiyaç duyar
+- reaktif mi proaktif mi
+- deterministic mi, AI-driven mı, hibrit mi olmalı
+
+==================================================
+6. AI MİMARİSİNDEN BEKLENTİ
+==================================================
+
+Bana boş konuşma değil, ciddi bir mimari öneri ver.
+
+Şunları düşünmelisin:
+
+A) AI orchestration
+İstek akışı nasıl çalışmalı?
+Sistem nasıl karar vermeli:
+- hangi skill kullanılacak
+- hangi bağlam toplanacak
+- gerçekten AI gerekip gerekmediği
+- özet mi, analiz mi, öneri mi, veri sorgusu mu gerektiği
+- çıktının nasıl compose edileceği
+
+B) Context building
+AI kör çalışmamalı.
+Her modül için bağlam nasıl toplanmalı, açıkla:
+- görev bağlamı
+- toplantı bağlamı
+- not bağlamı
+- rapor bağlamı
+- sorgu bağlamı
+- onay bağlamı
+
+C) Prompt / template / instruction tasarımı
+Prompt şablonları nasıl yapılandırılmalı?
+Kaosu nasıl önleriz?
+
+D) Memory / learning
+Sistem zaman içinde nasıl “öğrenmeli” ama istikrarsız hale gelmemeli?
+“Modeli fine-tune edin” gibi havada cevap istemiyorum.
+Şu tip pratik öğrenme modeli istiyorum:
+- interaction history
+- approved patterns
+- user feedback
+- reviewed memory
+- golden memory
+- skill-specific improvement loops
+
+E) Evaluation
+AI’nın gerçekten iyileştiğini nasıl anlarız?
+Neleri ölçmeliyiz?
+Örnekler:
+- kabul oranı
+- faydalılık
+- doğruluk
+- görev dönüşüm oranı
+- özet kalitesi
+- öneri faydası
+- sorgu açıklama kalitesi
+- hallucination kontrolü
+- kullanıcı güveni
+
+F) Governance / control
+AI’yı nasıl güvenli ve faydalı tutarız?
+- logging
+- explainability
+- confidence
+- user feedback
+- auditability
+- human override
+- permission-aware behavior
+
+==================================================
+7. DATA / QUERY / INTELLIGENCE TARAFI
+==================================================
+
+Bu ürünün veri / sorgu / rapor / AI-analiz tarafı da var.
+
+Bu kısmın nasıl evrilmesi gerektiğini dikkatli düşünmeni istiyorum.
+
+Önemli:
+- YonetIQ’yi tamamen BI ürününe çevirmiyoruz.
+- Ama akıllı sorgulama, raporlama ve yorumlama önemli.
+
+Şunları açıkla:
+- query AI nasıl gelişmeli
+- rapor analizi nasıl daha akıllı hale gelmeli
+- sistem sorgu sonuçlarını nasıl yorumlamalı
+- ham veri açıklamasından yönetsel içgörüye nasıl geçilmeli
+- semantic understanding burada nasıl yardımcı olur
+
+Ayrıca semantic layer yaklaşımını da tartış:
+- semantic layer nedir
+- YonetIQ’nin buna ihtiyacı var mı
+- hafif bir semantic layer mı gerekir, daha formal bir yapı mı
+- business terms / metrics / glossary / data meaning daha iyi AI cevabını nasıl destekler
+- bunu ilk günden aşırı mühendislik yapmadan, pragmatik şekilde nasıl fazlara bölebiliriz
+
+Önemli:
+Bunu saf bir text-to-SQL projesine çevirme.
+Ürün kimliğiyle hizalı kal.
+
+==================================================
+8. ÜRÜN VS PLATFORM SINIRI
+==================================================
+
+Bu bölüm çok önemli.
+
+Şunları açıkça ayırmanı istiyorum:
+
+A) YonetIQ içinde ürüne özgü kalması gerekenler
+B) İleride reusable shared capability haline gelebilecekler
+C) Henüz dışarı çıkarılmaması gerekenler
+D) Çok erken servisleştirilirse hata olacak alanlar
+
+Disiplinli bir mimar gibi düşün.
+Körü körüne “mikroservis” önerme.
+Bana şunu net söyle:
+- ne ürün içinde kalmalı
+- ne ileride shared service olabilir
+- neyi şu an bölmek kesinlikle yanlış olur
+
+==================================================
+9. UX / ÜRÜN DENEYİMİ
+==================================================
+
+Burada güçlü ürün düşüncesi istiyorum.
+
+AI merkezi ve gerçek hissettirsin diye UX nasıl evrilmeli, açıkla.
+
+Şunlara değin:
+- global komut çubuğu
+- bağlamsal AI yan paneli
+- AI tarafından üretilen briefing blokları
+- inline öneriler
+- proaktif yönlendirmeler
+- aksiyona dönüştürme akışları
+- güven / açıklama UX’i
+- confidence göstergeleri
+- feedback kalıpları
+- “AI bunu neden söyledi?” türü affordance’lar
+
+Şunu da açıkla:
+nasıl kaçınırız:
+- rahatsız edici kesintilerden
+- sahte proaktiviteden
+- gürültülü AI’dan
+- jenerik asistan hissinden
+- feature clutter’dan
+
+Keskin, disiplinli ve faydalı hissettiren bir ürün istiyorum.
+
+==================================================
+10. MÜHENDİSLİK GERÇEĞİ
+==================================================
+
+Pragmatik ol.
+
+Bunun evrilebilen mevcut bir sistem olduğunu varsay.
+Greenfield hayalciliği yapma.
+
+Önerilerin şu ayrımı yapmalı:
+- hızlı kazanımlar
+- orta vadeli yapısal iyileştirmeler
+- uzun vadeli mimari hamleler
+
+Fazlı bir uygulama planı öner.
+
+Örnek olarak:
+Faz 1:
+- görünür AI kazanımları
+- ana sayfa briefing
+- global komut çubuğu
+- bağlamsal skill’ler
+- temel AI history / feedback
+
+Faz 2:
+- skill registry
+- context builder
+- modüler orchestration
+- daha iyi evaluation
+- gelişmiş query/report analizi
+
+Faz 3:
+- daha derin semantic intelligence
+- proaktif insight engine
+- gerçekten gerekirse reusable internal services
+- daha güçlü governance / learning loop’ları
+
+Ama bunu körü körüne kopyalama.
+Düşün ve en iyi sürümü öner.
+
+==================================================
+11. SENDEN İSTEDİĞİM ÇIKTI
+==================================================
+
+Bana çok detaylı ve yapısal bir cevap ver.
+Şu bölümler olmalı:
+
+1. Executive judgment
+- Bu yön stratejik olarak doğru mu?
+- Bu dönüşümün en akıllı versiyonu ne?
+
+2. Core product positioning
+- Bu dönüşümden sonra YonetIQ neye dönüşüyor?
+- Tek cümle ve tek paragrafla nasıl tanımlanmalı?
+
+3. AI-first product vision
+- Kullanıcı ne hissetmeli?
+- Günlük kullanımda ne değişmeli?
+
+4. Capability map
+- modül modül AI yetenekleri
+- global yetenekler
+- proaktif vs reaktif yetenekler
+
+5. Skill architecture
+- skill nedir
+- kategoriler
+- önerilen ilk skill kataloğu
+- skill lifecycle
+
+6. AI system architecture
+- orchestration
+- context building
+- prompt sistemi
+- memory/learning
+- evaluation
+- governance
+
+7. Data/query/report intelligence strategy
+- akıllı query/report davranışı nasıl gelişmeli
+- semantic layer’ın rolü
+- hafif semantic yaklaşım vs derin semantic yaklaşım
+
+8. Product vs platform boundaries
+- ne YonetIQ içinde kalmalı
+- ne ileride reusable service olabilir
+- neyi henüz çıkarmamak gerekir
+
+9. UX transformation plan
+- ana sayfa
+- global AI girişi
+- modül bazlı AI yüzeyleri
+- trust/feedback UX
+
+10. Engineering roadmap
+- fazlı plan
+- öncelikler
+- sıralama
+- büyük riskler
+- kaçınılması gereken anti-pattern’ler
+
+11. Final recommendation
+- tek en iyi yol haritası
+- ilk ne yapılmalı
+- ne yapılmamalı
+
+==================================================
+12. DÜŞÜNME TARZI
+==================================================
+
+Görüş bildir.
+Eleştirel ol.
+Gerçekçi ol.
+Beni memnun etmeye çalışma.
+Gerçekten açıklamadan “it depends” deme.
+Bir şey kötü fikirse açıkça söyle.
+Bir şey erkense açıkça söyle.
+Çekici görünüp stratejik olarak yanlışsa açıkça yüzüme vur.
+
+Ben derinlik, yapı ve kıdemli yargı istiyorum.
+
+Uygunsa ayrıca şunları da üretebilirsin:
+- önerilen iç modül isimleri
+- önerilen servis isimleri
+- önerilen mimari katmanlar
+- önerilen skill taxonomy
+- önerilen UI pattern’leri
+- AI feedback/memory için tablo/entity önerileri
+- roadmap milestone önerileri
+
+Ama şu ana talimata her zaman sadık kal:
+
+YonetIQ kendi ürünü olarak kalacak.
+AI çok daha merkezi ve hissedilir olacak.
+Mimari pragmatik şekilde iyileşecek.
+Platform extraction seçici ve disiplinli olacak.
+
+==================================================
+13. ÇALIŞMA YÖNTEMİ VE UYGULAMA DİSİPLİNİ
+==================================================
+
+Senden sadece fikir üretmeni değil, uygulanabilir ve kontrollü bir çalışma sistemi kurmanı istiyorum.
+
+Şu çalışma disiplinine kesin olarak uy:
+
+1. Önce plan oluştur
+- Her zaman işe önce yüksek seviyeli ama uygulanabilir bir plan çıkararak başla.
+- Plan; amaç, kapsam, varsayımlar, bağımlılıklar, riskler, fazlar ve teslimleri içermeli.
+- Plansız doğrudan çözüm veya kod üretme.
+
+2. Detaylı dokümanlar üret
+- Çalışma boyunca gerekli dokümanları üretmelisin.
+- Örneğin:
+  - ürün vizyonu
+  - kapsam dokümanı
+  - mimari doküman
+  - modül tasarımı
+  - skill tanımları
+  - veri akışları
+  - iş akışları
+  - test stratejisi
+  - rollout planı
+  - risk ve karar kayıtları
+- Her önemli karar dokümante edilmeli.
+- Belirsiz bırakılmış alanları açıkça işaretlemelisin.
+
+3. İş akışlarını tanımla
+- Her kritik özellik veya modül için iş akışı tanımları oluştur.
+- Kullanıcı akışı, sistem akışı, AI orchestration akışı, veri akışı ve onay/geri bildirim akışlarını ayrı ayrı düşün.
+- Gerekirse adım adım senaryo bazlı akışlar üret.
+
+4. Fazlı ve kontrollü ilerle
+- Büyük işi küçük, doğrulanabilir aşamalara böl.
+- Her aşamanın açık hedefi, çıktısı ve başarı kriteri olsun.
+- Bir sonraki aşamaya geçmeden önce mevcut aşamanın tamamlandığını ve çalıştığını doğrula.
+
+5. Testleri asla atlama
+- Test ve doğrulama opsiyonel değil, zorunlu olmalı.
+- Her aşamada:
+  - neyin test edileceğini
+  - nasıl test edileceğini
+  - beklenen sonucu
+  - başarı / başarısızlık kriterini
+  açıkça belirt.
+- Uygun yerlerde:
+  - unit test
+  - integration test
+  - workflow test
+  - acceptance test
+  - regression check
+  - AI çıktı kalite kontrolü
+  düşünülmeli.
+
+6. “Çalışıyor varsayımı” yapma
+- Bir şeyin çalıştığını varsayma.
+- Her önemli aşamada doğrulama yaklaşımı tanımla.
+- Özellikle AI ile ilgili alanlarda:
+  - doğruluk
+  - faydalılık
+  - güvenilirlik
+  - tutarlılık
+  - kullanıcı kabulü
+  ölçülmeli.
+
+7. Test geçmeden sonraki adıma geçme
+- Bu çok önemli.
+- Bir aşama için tanımlanmış doğrulama ve test kriterleri karşılanmadan sonraki aşamaya geçme.
+- “Sonra düzeltiriz” yaklaşımını kabul etme.
+
+8. Doküman + uygulama + doğrulama birlikte ilerlesin
+- Sadece strateji anlatma.
+- Sadece kod önerme.
+- Sadece roadmap çıkarma.
+- Her zaman şu sırayla düşün:
+  - plan
+  - tasarım
+  - dokümantasyon
+  - iş akışı
+  - uygulama yaklaşımı
+  - test/doğrulama
+  - sonraki adım
+
+9. Çıktıları action-oriented üret
+- Her bölümün sonunda somut çıktı üret:
+  - yapılacaklar
+  - teslimler
+  - sorular / riskler
+  - test noktaları
+  - çıkış kriterleri
+
+10. Yüzeysel kalma
+- Bana sadece “şunu yapın, bunu yapın” deme.
+- Her öneriyi uygulanabilir hale getir.
+- Gerektiğinde:
+  - tablo
+  - madde seti
+  - aşama planı
+  - akış şeması mantığı
+  - modül sorumlulukları
+  - test matrisi
+  üret.
+
+11. Mühendislik disiplini zorunlu
+- Her çözüm önerisi şu soruları cevaplamalı:
+  - neden bu yapı seçildi
+  - alternatifler nelerdi
+  - trade-off nedir
+  - nasıl test edilir
+  - ne zaman ölçeklenir
+  - ne zaman erken / fazla karmaşık olur
+
+12. Çıktı üretim biçimi
+- Eğer kapsamlı bir dönüşüm öneriyorsan, bunu mutlaka fazlara böl.
+- Her faz için şu başlıkları ver:
+  - amaç
+  - kapsam
+  - teslimler
+  - bağımlılıklar
+  - riskler
+  - test ve doğrulama
+  - çıkış kriteri
+- Sonraki faz, önceki fazın çıkış kriteri sağlanmadan başlamamalı.
+
+==================================================
+14. EK KISIT VE BAĞLAM GÜVENLİĞİ
+==================================================
+
+Bu prompt içinde açıkça tanımlanmayan herhangi bir harici ürün, benchmark, mimari veya daha önce konuşulmuş sistem hakkında bilgi sahibi olduğunu varsayma.
+Yalnızca bu promptta verilen YonetIQ bağlamına göre düşün.
+Planlama, dokümantasyon, iş akışı tasarımı, doğrulama ve test disiplinini atlayan cevaplar verme.
+Güzel görünen ama uygulanmamış, doğrulanmamış veya test edilmemiş önerileri tamamlanmış çözüm gibi sunma.
+
+Ayrıca şunlara da uy:
+- Sadece vizyon üretme; uygulama disiplini kur.
+- Sadece öneri verme; doğrulama yaklaşımı da ver.
+- Sadece yol haritası çıkarma; her aşamanın test ve çıkış kriterini tanımla.
+- Test edilmemiş veya doğrulanmamış bir aşamayı tamamlanmış sayma.

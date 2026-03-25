@@ -1,0 +1,13 @@
+{
+  "version": 1,
+  "isRoot": true,
+  "tools": {
+    "sqlcli": {
+      "version": "1.0.0",
+      "commands": [
+        "sqlcli"
+      ],
+      "rollForward": false
+    }
+  }
+}

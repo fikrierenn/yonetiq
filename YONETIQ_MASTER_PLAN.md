@@ -1664,5 +1664,44 @@ Tahmin yapma — sözlükte varsa sözlükteki tanımı kullan.
 
 ---
 
-*Bu belge Claude Code session'larında referans alınmak üzere hazırlanmıştır.*  
-*`D:\Dev\yonet\YONETIQ_MASTER_PLAN.md` olarak kaydet.*
+---
+
+## BÖLÜM 11 — DB SKİLL SİSTEMİ + ÖĞRENME MİMARİSİ
+
+> Detaylı implementasyon: `D:/Dev/yonet/YONETIQ_LEARNING_SYSTEM.md`
+
+### Özet
+Master plan (Bölüm 0-10) tamamlandıktan sonra uygulanacak. Skill'leri code-defined'dan DB'ye taşır, multi-sinyal öğrenme sistemi kurar.
+
+### Neden
+- Skill değiştirmek → deploy gerektirmesin
+- Temperature, prompt → admin panelden ayarlanabilsin
+- A/B test yapılabilsin
+- Pattern'ler kullanıcı davranışından otomatik öğrensin
+
+### Sinyal Sistemi
+| Sinyal | Ağırlık |
+|--------|---------|
+| Thumbs up | +3.0 |
+| Implicit accept | +1.0 |
+| SQL accepted | +1.5 |
+| Thumbs down | -5.0 |
+| SQL correction | -2.0 |
+| Decay (30 gün) | -0.3 |
+
+**Eşikler:** ≥8.0 oto-onay, 4.0-7.9 admin, <4.0 gürültü
+
+### Yeni Dosyalar (15 adım)
+1. DB: AiSkillDefinitions, AiPatternSignals, SemanticLearningCandidates, AiQueryLog tabloları
+2. Model: AiSkillRecord.cs
+3. Servis: SkillPersistenceService, LearningSignalService, SemanticDiscoveryService
+4. UI: /admin/skill-yonetim, /admin/semantik-ogrenme
+5. Güncelleme: SkillRegistry.Disable, AiMemoryService, AiOrchestration, PromptEngine DB override
+
+### Uygulama Sırası
+Bölüm 0-10 → Bölüm 11 (bu bölüm) → 15 alt adım sırayla
+
+---
+
+*Bu belge Claude Code session'larında referans alınmak üzere hazırlanmıştır.*
+*Agent: `learning-architect.md` — bu bölümün uzman agent'ı*

@@ -25,9 +25,9 @@ public class EmailService(SettingsService settings, ILogger<EmailService> logger
                 return ServiceResult.Failure(error!);
 
             var message = BuildMessage(cfg, to, subject, htmlBody);
-            using (client)
+            using (client!)
             {
-                await SendAndDisconnect(client, message);
+                await SendAndDisconnect(client!, message);
             }
             return ServiceResult.Success();
         }

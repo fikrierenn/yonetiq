@@ -74,13 +74,13 @@ public class SkillExecutor(
             if (totalPromptLength > maxPromptChars)
             {
                 var excess = totalPromptLength - maxPromptChars;
-                userPrompt = userPrompt[..^excess] + "\n\n_(Bağlam boyut sınırına ulaşıldığı için kısaltıldı.)_";
+                userPrompt = (userPrompt ?? "")[..^excess] + "\n\n_(Bağlam boyut sınırına ulaşıldığı için kısaltıldı.)_";
                 logger.LogWarning("Prompt truncated for skill {SkillId}: {Total} > {Max} chars",
                     skill.Id, totalPromptLength, maxPromptChars);
             }
 
             // 5. AI Provider çağrısı (multi-provider: Gemini + OpenAI + Anthropic)
-            var aiContent = await aiProvider.GenerateAsync(systemPrompt, userPrompt, skill.Temperature);
+            var aiContent = await aiProvider.GenerateAsync(systemPrompt ?? "", userPrompt ?? "", skill.Temperature);
 
             sw.Stop();
 

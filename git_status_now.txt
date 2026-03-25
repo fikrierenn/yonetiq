@@ -1,0 +1,4 @@
+fatal: not a git repository (or any of the parent directories): .git
+
+----- BRANCHES ----- 
+fatal: not a git repository (or any of the parent directories): .git

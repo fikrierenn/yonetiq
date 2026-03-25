@@ -24,6 +24,9 @@ public class ContextBuilderService(
     SemanticService semanticSvc,
     ILogger<ContextBuilderService> logger)
 {
+    // İleride kullanılacak servisler — CS9113 suppress
+    private readonly QuerySetService _querySetSvc = querySetSvc;
+    private readonly LookupService _lookupSvc = lookupSvc;
     /// <summary>
     /// Skill tanımı ve istek parametrelerine göre bağlam verisini toplar.
     /// Her skill'in RequiredEntities ve Module bilgisine göre ilgili servislerden veri çeker.

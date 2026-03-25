@@ -412,18 +412,18 @@ public static partial class SeedData
 
         await conn.ExecuteAsync(stepInsert, new[] {
             // AR1: Pending — iki adimli
-            new { ApprovalRequestId = ar1, StepOrder = 1, ApproverId = finId, ApproverName = UN("Finans"), Status = "Approved", Comment = "Butce analizi uygun", ActionAt = (DateTime?)now.AddDays(-2), CreatedAt = now.AddDays(-3) },
-            new { ApprovalRequestId = ar1, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)null, ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-3) },
+            new { ApprovalRequestId = ar1, StepOrder = 1, ApproverId = finId, ApproverName = UN("Finans"), Status = "Approved", Comment = (string?)"Butce analizi uygun", ActionAt = (DateTime?)now.AddDays(-2), CreatedAt = now.AddDays(-3) },
+            new { ApprovalRequestId = ar1, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)"", ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-3) },
             // AR2: Approved — iki adimli
-            new { ApprovalRequestId = ar2, StepOrder = 1, ApproverId = opId, ApproverName = UN("Operasyon"), Status = "Approved", Comment = "Teknik ihtiyac dogrulandi", ActionAt = (DateTime?)now.AddDays(-9), CreatedAt = now.AddDays(-10) },
-            new { ApprovalRequestId = ar2, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Approved", Comment = "Onaylandi", ActionAt = (DateTime?)now.AddDays(-8), CreatedAt = now.AddDays(-10) },
+            new { ApprovalRequestId = ar2, StepOrder = 1, ApproverId = opId, ApproverName = UN("Operasyon"), Status = "Approved", Comment = (string?)"Teknik ihtiyac dogrulandi", ActionAt = (DateTime?)now.AddDays(-9), CreatedAt = now.AddDays(-10) },
+            new { ApprovalRequestId = ar2, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Approved", Comment = (string?)"Onaylandi", ActionAt = (DateTime?)now.AddDays(-8), CreatedAt = now.AddDays(-10) },
             // AR3: Rejected — uc adimli
-            new { ApprovalRequestId = ar3, StepOrder = 1, ApproverId = satId, ApproverName = UN("Satış"), Status = "Approved", Comment = "Katilim gerekli", ActionAt = (DateTime?)now.AddDays(-7), CreatedAt = now.AddDays(-8) },
-            new { ApprovalRequestId = ar3, StepOrder = 2, ApproverId = finId, ApproverName = UN("Finans"), Status = "Rejected", Comment = "Butce asimi nedeniyle reddedildi", ActionAt = (DateTime?)now.AddDays(-6), CreatedAt = now.AddDays(-8) },
-            new { ApprovalRequestId = ar3, StepOrder = 3, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)null, ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-8) },
+            new { ApprovalRequestId = ar3, StepOrder = 1, ApproverId = satId, ApproverName = UN("Satış"), Status = "Approved", Comment = (string?)"Katilim gerekli", ActionAt = (DateTime?)now.AddDays(-7), CreatedAt = now.AddDays(-8) },
+            new { ApprovalRequestId = ar3, StepOrder = 2, ApproverId = finId, ApproverName = UN("Finans"), Status = "Rejected", Comment = (string?)"Butce asimi nedeniyle reddedildi", ActionAt = (DateTime?)now.AddDays(-6), CreatedAt = now.AddDays(-8) },
+            new { ApprovalRequestId = ar3, StepOrder = 3, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)"", ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-8) },
             // AR4: Pending — iki adimli
-            new { ApprovalRequestId = ar4, StepOrder = 1, ApproverId = opId, ApproverName = UN("Operasyon"), Status = "Approved", Comment = "Tedarikci performansi iyi", ActionAt = (DateTime?)now.AddDays(0), CreatedAt = now.AddDays(-1) },
-            new { ApprovalRequestId = ar4, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)null, ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-1) },
+            new { ApprovalRequestId = ar4, StepOrder = 1, ApproverId = opId, ApproverName = UN("Operasyon"), Status = "Approved", Comment = (string?)"Tedarikci performansi iyi", ActionAt = (DateTime?)now.AddDays(0), CreatedAt = now.AddDays(-1) },
+            new { ApprovalRequestId = ar4, StepOrder = 2, ApproverId = gmId, ApproverName = UN("Genel"), Status = "Pending", Comment = (string?)"", ActionAt = (DateTime?)null, CreatedAt = now.AddDays(-1) },
         });
 
         // ==================== OBJECTIVES + KEY RESULTS ====================
