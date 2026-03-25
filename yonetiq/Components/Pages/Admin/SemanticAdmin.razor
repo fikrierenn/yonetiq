@@ -1,0 +1,368 @@
+@page "/admin/semantik-ogrenme"
+@using YonetIQ.Data.Models
+@using YonetIQ.Data.Services
+@using YonetIQ.Data.Services.AI
+@inject SemanticService SemanticSvc
+@inject SemanticBootstrapService BootstrapSvc
+@inject SemanticDiscoveryService DiscoverySvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+@inject IToastService Toast
+
+<PageTitle>Semantik Terim Yönetimi</PageTitle>
+
+<div class="yi-page-header mb-4">
+    <h1 class="yi-page-title"><i class="bi bi-book me-2"></i>Semantik Terim Yönetimi</h1>
+    <p class="text-muted">AI'ın iş terimlerini nasıl anladığını burada kontrol et ve düzelt</p>
+</div>
+
+@* Üst araç çubuğu *@
+<div class="d-flex gap-2 mb-4 flex-wrap">
+    <button class="yi-btn-primary yi-btn-sm" @onclick="() => StartEdit(new SemanticDefinition { IsActive = true })">
+        <i class="bi bi-plus-circle"></i> Yeni Terim
+    </button>
+    <button class="yi-btn-outline yi-btn-sm" @onclick="BootstrapAsync" disabled="@_bootstrapping">
+        @if (_bootstrapping) { <span class="spinner-border spinner-border-sm me-1"></span> }
+        <i class="bi bi-magic"></i> Schema'dan Otomatik Üret
+    </button>
+    <button class="yi-btn-outline yi-btn-sm" @onclick="LoadCandidatesAsync">
+        <i class="bi bi-lightbulb"></i> Keşfedilen Adaylar (@_candidateCount)
+    </button>
+    <div class="ms-auto">
+        <input type="text" class="yi-input yi-input-sm" style="width:250px" placeholder="Terim ara..."
+               @bind="_searchTerm" @bind:event="oninput" @onkeyup="SearchAsync" />
+    </div>
+</div>
+
+@* Tip bazlı sekmeler *@
+<div class="d-flex gap-2 mb-3">
+    @foreach (var tip in new[] { ("Tümü", ""), ("Ölçü", "measure"), ("Tarih", "date_range"), ("Boyut", "dimension"), ("KPI", "kpi") })
+    {
+        <button class="yi-btn-sm @(_filterType == tip.Item2 ? "yi-btn-primary" : "yi-btn-outline")"
+                @onclick="() => FilterByType(tip.Item2)">
+            @tip.Item1
+        </button>
+    }
+</div>
+
+@* Terim listesi *@
+@if (_terms.Count > 0)
+{
+    <div class="yi-card">
+        <div class="yi-card-body p-0">
+            <table class="yi-table mb-0">
+                <thead>
+                    <tr>
+                        <th style="width:50px">Tip</th>
+                        <th>İş Terimi</th>
+                        <th>Açıklama</th>
+                        <th>SQL İfadesi</th>
+                        <th>Tablo.Kolon</th>
+                        <th>Alternatifler</th>
+                        <th style="width:50px">Durum</th>
+                        <th class="text-right" style="width:100px">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var term in _filteredTerms)
+                    {
+                        <tr>
+                            <td>
+                                <span class="yi-badge @GetTypeBadgeClass(term.TermType)">
+                                    @GetTypeLabel(term.TermType)
+                                </span>
+                            </td>
+                            <td class="fw-semibold">@term.BusinessName</td>
+                            <td class="text-muted small">@term.Description</td>
+                            <td>
+                                @if (!string.IsNullOrEmpty(term.SqlExpression))
+                                {
+                                    <code class="yi-code-inline small">@Truncate(term.SqlExpression, 50)</code>
+                                }
+                            </td>
+                            <td class="small">
+                                @if (!string.IsNullOrEmpty(term.TableName))
+                                {
+                                    <span>@term.TableName</span>
+                                    @if (!string.IsNullOrEmpty(term.ColumnName))
+                                    { <span class="text-muted">.@term.ColumnName</span> }
+                                }
+                            </td>
+                            <td class="text-muted small">@Truncate(term.Aliases, 40)</td>
+                            <td>
+                                @if (term.IsActive)
+                                { <i class="bi bi-check-circle text-success" title="Aktif"></i> }
+                                else
+                                { <i class="bi bi-pause-circle text-muted" title="Pasif"></i> }
+                            </td>
+                            <td class="text-right">
+                                <button class="yi-btn-outline yi-btn-sm" @onclick="() => StartEdit(term)" title="Düzenle">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <button class="yi-btn-outline-danger yi-btn-sm" @onclick="() => DeleteAsync(term.Id)" title="Sil">
+                                    <i class="bi bi-trash"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+        <div class="yi-card-footer small text-muted">
+            Toplam @_terms.Count terim | Gösterilen @_filteredTerms.Count
+        </div>
+    </div>
+}
+else
+{
+    <div class="yi-card text-center py-5">
+        <i class="bi bi-book fs-1 text-muted"></i>
+        <div class="mt-2 text-muted">Henüz semantik terim yok. "Schema'dan Otomatik Üret" ile başlayın.</div>
+    </div>
+}
+
+@* Keşfedilen adaylar (modal benzeri) *@
+@if (_showCandidates && _candidates.Count > 0)
+{
+    <div class="yi-card mt-4" style="border-color:var(--yi-accent)">
+        <div class="yi-card-header d-flex justify-content-between">
+            <h2 class="yi-card-title"><i class="bi bi-lightbulb me-2"></i>AI Tarafından Keşfedilen Terim Adayları</h2>
+            <button class="yi-btn-ghost yi-btn-sm" @onclick="() => _showCandidates = false"><i class="bi bi-x"></i></button>
+        </div>
+        <div class="yi-card-body p-0">
+            <table class="yi-table mb-0">
+                <thead><tr><th>Terim</th><th>Sıklık</th><th>Kaynak</th><th class="text-right">İşlem</th></tr></thead>
+                <tbody>
+                    @foreach (var c in _candidates)
+                    {
+                        <tr>
+                            <td class="fw-semibold">@c.Term</td>
+                            <td>@c.Frequency</td>
+                            <td class="text-muted small">@c.DetectedInSkillId</td>
+                            <td class="text-right">
+                                <button class="yi-btn-outline yi-btn-sm text-success" @onclick="() => ApproveCandidateAsync(c)" title="Onayla">
+                                    <i class="bi bi-check"></i>
+                                </button>
+                                <button class="yi-btn-outline yi-btn-sm text-danger" @onclick="() => RejectCandidateAsync(c.Id)" title="Reddet">
+                                    <i class="bi bi-x"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+
+@* Düzenleme formu *@
+@if (_editTerm is not null)
+{
+    <div class="yi-card mt-4" style="border-color:var(--yi-accent)">
+        <div class="yi-card-header">
+            <h2 class="yi-card-title">@(_editTerm.Id == 0 ? "Yeni Terim" : "Terim Düzenle")</h2>
+        </div>
+        <div class="yi-card-body">
+            <div class="row g-3">
+                <div class="col-md-3">
+                    <label class="yi-label">Tip</label>
+                    <select class="yi-input" @bind="_editTerm.TermType">
+                        <option value="measure">Ölçü (SUM, AVG)</option>
+                        <option value="date_range">Tarih Aralığı</option>
+                        <option value="dimension">Boyut (GROUP BY)</option>
+                        <option value="kpi">KPI (hesaplanmış)</option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="yi-label">İş Terimi</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.BusinessName" placeholder="Örn: ciro, geçen ay, mağaza" />
+                </div>
+                <div class="col-md-5">
+                    <label class="yi-label">Açıklama</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.Description" placeholder="Ne anlama geliyor?" />
+                </div>
+                <div class="col-md-3">
+                    <label class="yi-label">Tablo</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.TableName" placeholder="Örn: fatAyr" />
+                </div>
+                <div class="col-md-3">
+                    <label class="yi-label">Kolon</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.ColumnName" placeholder="Örn: ehTutar" />
+                </div>
+                <div class="col-md-6">
+                    <label class="yi-label">SQL İfadesi</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.SqlExpression" placeholder="Örn: SUM(ehTutar)" />
+                </div>
+                <div class="col-md-9">
+                    <label class="yi-label">Alternatif İsimler (virgülle ayır)</label>
+                    <input type="text" class="yi-input" @bind="_editTerm.Aliases" placeholder="Örn: ciro,gelir,hasılat,toplam satış" />
+                </div>
+                <div class="col-md-3">
+                    <label class="yi-label">Durum</label>
+                    <select class="yi-input" @bind="_editTerm.IsActive">
+                        <option value="true">Aktif</option>
+                        <option value="false">Pasif</option>
+                    </select>
+                </div>
+            </div>
+            <div class="d-flex gap-2 mt-3">
+                <button class="yi-btn-primary" @onclick="SaveEditAsync">
+                    <i class="bi bi-check2"></i> Kaydet
+                </button>
+                <button class="yi-btn-outline" @onclick="() => _editTerm = null">İptal</button>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private List<SemanticDefinition> _terms = [];
+    private List<SemanticDefinition> _filteredTerms = [];
+    private List<YonetIQ.Data.Models.AI.SemanticLearningCandidate> _candidates = [];
+    private int _candidateCount;
+    private SemanticDefinition? _editTerm;
+    private string _searchTerm = string.Empty;
+    private string _filterType = string.Empty;
+    private bool _bootstrapping;
+    private bool _showCandidates;
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionSvc.IsLoggedIn || SessionSvc.ActiveUser.Role != "Genel Müdür")
+        { Nav.NavigateTo("/"); return; }
+
+        await LoadTermsAsync();
+        var candResult = await DiscoverySvc.ListPendingAsync();
+        if (candResult.IsSuccess) _candidateCount = candResult.Data?.Count ?? 0;
+    }
+
+    private async Task LoadTermsAsync()
+    {
+        var result = await SemanticSvc.ListAsync();
+        if (result.IsSuccess) _terms = result.Data ?? [];
+        ApplyFilter();
+    }
+
+    private void ApplyFilter()
+    {
+        _filteredTerms = _terms;
+        if (!string.IsNullOrEmpty(_filterType))
+            _filteredTerms = _filteredTerms.Where(t => t.TermType == _filterType).ToList();
+        if (!string.IsNullOrWhiteSpace(_searchTerm))
+            _filteredTerms = _filteredTerms.Where(t =>
+                (t.BusinessName?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                (t.Aliases?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) == true) ||
+                (t.SqlExpression?.Contains(_searchTerm, StringComparison.OrdinalIgnoreCase) == true)
+            ).ToList();
+    }
+
+    private void FilterByType(string type) { _filterType = type; ApplyFilter(); }
+    private Task SearchAsync() { ApplyFilter(); return Task.CompletedTask; }
+
+    private void StartEdit(SemanticDefinition term)
+    {
+        _editTerm = new SemanticDefinition
+        {
+            Id = term.Id,
+            TermType = term.TermType,
+            TableName = term.TableName,
+            ColumnName = term.ColumnName,
+            BusinessName = term.BusinessName,
+            Description = term.Description,
+            SqlExpression = term.SqlExpression,
+            Aliases = term.Aliases,
+            DataSourceId = term.DataSourceId,
+            IsActive = term.IsActive
+        };
+    }
+
+    private async Task SaveEditAsync()
+    {
+        if (_editTerm is null || string.IsNullOrWhiteSpace(_editTerm.BusinessName)) return;
+        var result = await SemanticSvc.SaveAsync(_editTerm);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess(_editTerm.Id == 0 ? "Terim eklendi" : "Terim güncellendi");
+            _editTerm = null;
+            await LoadTermsAsync();
+        }
+        else Toast.ShowError(result.Message);
+    }
+
+    private async Task DeleteAsync(int id)
+    {
+        await SemanticSvc.DeleteAsync(id);
+        Toast.ShowSuccess("Terim silindi");
+        await LoadTermsAsync();
+    }
+
+    private async Task BootstrapAsync()
+    {
+        _bootstrapping = true; StateHasChanged();
+        var mappingPath = Path.Combine(AppContext.BaseDirectory, "Data", "schema_mapping.json");
+
+        // Proje kökünde de kontrol et
+        if (!File.Exists(mappingPath))
+            mappingPath = Path.Combine(Directory.GetCurrentDirectory(), "Data", "schema_mapping.json");
+
+        var result = await BootstrapSvc.BootstrapFromMappingAsync(mappingPath);
+        if (result.IsSuccess)
+        {
+            Toast.ShowSuccess($"{result.Data} terim eklendi/güncellendi");
+            await LoadTermsAsync();
+        }
+        else Toast.ShowError(result.Message);
+        _bootstrapping = false;
+    }
+
+    private async Task LoadCandidatesAsync()
+    {
+        var result = await DiscoverySvc.ListPendingAsync();
+        if (result.IsSuccess) _candidates = result.Data ?? [];
+        _candidateCount = _candidates.Count;
+        _showCandidates = true;
+    }
+
+    private async Task ApproveCandidateAsync(YonetIQ.Data.Models.AI.SemanticLearningCandidate candidate)
+    {
+        // Adayı onayla ve SemanticDefinition olarak ekle
+        await DiscoverySvc.ReviewCandidateAsync(candidate.Id, "Approved", SessionSvc.ActiveUser.UserId);
+        StartEdit(new SemanticDefinition
+        {
+            BusinessName = candidate.Term,
+            TermType = "dimension",
+            Description = $"Kullanıcı sorgularından keşfedildi (sıklık: {candidate.Frequency})",
+            IsActive = true
+        });
+        _candidates.Remove(candidate);
+        _candidateCount = _candidates.Count;
+    }
+
+    private async Task RejectCandidateAsync(int id)
+    {
+        await DiscoverySvc.ReviewCandidateAsync(id, "Rejected", SessionSvc.ActiveUser.UserId);
+        _candidates.RemoveAll(c => c.Id == id);
+        _candidateCount = _candidates.Count;
+    }
+
+    private static string GetTypeBadgeClass(string type) => type switch
+    {
+        "measure" => "yi-badge-info",
+        "date_range" => "yi-badge-warning",
+        "dimension" => "yi-badge-light",
+        "kpi" => "yi-badge-success",
+        _ => "yi-badge-light"
+    };
+
+    private static string GetTypeLabel(string type) => type switch
+    {
+        "measure" => "Ölçü",
+        "date_range" => "Tarih",
+        "dimension" => "Boyut",
+        "kpi" => "KPI",
+        _ => type
+    };
+
+    private static string Truncate(string? text, int max) =>
+        string.IsNullOrEmpty(text) ? "" : text.Length <= max ? text : text[..max] + "...";
+}
