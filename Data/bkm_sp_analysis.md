@@ -188,15 +188,24 @@ Gece 23:00 — DerinSis_Ozet Job:
       └── irsAyr + irs'den son 7/14/21/28/30/60/180/365 gün satış
 ```
 
-## İKİ FARKLI VERİ KAYNAĞI
+## İKİ TABLO — AYNI VERİ, FARKLI DETAY
 
-| Amaç | Tablo | Kullanıldığı Yer |
-|------|-------|-----------------|
-| Satış adet (periyodik) | `irsAyr` + `irs` | urnOzt365_tum (oztSon7, oztSon30 vb.) |
-| Stok bakiye + FIFO maliyet | `irsHrk` | urnOzt_fifoTek, stok hesaplama |
-| Satış hızı | `irs_vw` (view) | urnOzt_hizTek |
+**Doğrulandı:** `irsAyr` ve `irsHrk` birebir eşleşiyor (ehID + ehStkID ile JOIN).
+Aynı başlık ID=7126722 için her ikisinde de 907 satır, aynı ürünler, aynı adetler.
 
-**Sonuç:** Sistem hem `irsAyr+irs` hem `irsHrk` kullanıyor. Satış raporları için `irsAyr+irs`, stok/maliyet için `irsHrk`.
+| Tablo | Kolon | Amaç | Kullanıldığı Yer |
+|-------|-------|------|-----------------|
+| `irsAyr` (66M) | 31 kolon — tutar, indirim, KDV, birim, not | Detaylı satış raporu | urnOzt365_tum |
+| `irsHrk` (57M) | 12 kolon — adet, tutar, maliyet, tip | Hafif/hızlı stok+maliyet | urnOzt_fifoTek |
+| `irs_vw` | View (irsAyr+irs JOIN) | Kolay erişim | urnOzt_hizTek |
+
+**Fark:** irsAyr'da ehIndirim, ehTutarKDV, ehKDV, ehi1-5 (indirim kademeleri) var. irsHrk'da yok.
+**Neden iki tablo:** Performance — irsHrk 12 kolon ile stok/maliyet hesaplaması daha hızlı.
+
+**YonetIQ kuralı:**
+- Ciro/satış raporu → `irsAyr + irs` (detaylı, indirim/KDV dahil)
+- Stok bakiye → `irsHrk` (hafif, SUM(ehAdetN))
+- FIFO maliyet → `irsHrk.ehMlyt` (gece güncellenir)
 
 ---
 
