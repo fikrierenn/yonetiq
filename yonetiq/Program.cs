@@ -86,6 +86,10 @@ builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticEnricher>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.SkillTriggerEngine>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticDiscoveryService>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.ContinuousLearningService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticBootstrapService>();
+
+// WP8: Schema Discovery
+builder.Services.AddScoped<YonetIQ.Data.Services.SchemaDiscoveryService>();
 
 // DataSource şifreleme anahtarı yoksa uyar ve otomatik oluştur (yalnızca geliştirme ortamı için güvenli)
 var encKey = builder.Configuration["DataSourceEncryptionKey"];

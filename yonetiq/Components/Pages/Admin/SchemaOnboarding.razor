@@ -1,0 +1,244 @@
+@page "/admin/schema-onboarding"
+@inject SchemaDiscoveryService DiscoverySvc
+@inject DataSourceService DataSourceSvc
+@inject YonetIQ.Data.Services.AI.SemanticBootstrapService BootstrapSvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<PageTitle>Veri Kaynağı Şema Eşleme</PageTitle>
+
+<div class="yi-page-header mb-4">
+    <h1 class="yi-page-title"><i class="bi bi-diagram-3 me-2"></i>Veri Kaynağı Şema Eşleme</h1>
+    <p class="text-muted">AI'ın verilerinizi anlayabilmesi için şema kurulumu</p>
+</div>
+
+@* Adım göstergesi *@
+<div class="d-flex gap-3 mb-4 flex-wrap">
+    @foreach (var (label, idx) in new[] { ("Kaynak Seç", 1), ("Keşfet", 2), ("Soruları Cevapla", 3), ("Onayla", 4) })
+    {
+        <div class="d-flex align-items-center gap-2">
+            <div class="rounded-circle d-flex align-items-center justify-content-center fw-bold"
+                 style="width:32px;height:32px;background:@(idx <= _step ? "var(--yi-accent)" : "var(--yi-border)");color:@(idx <= _step ? "#fff" : "var(--yi-text-muted)")">
+                @idx
+            </div>
+            <span class="small @(idx == _step ? "fw-semibold" : "text-muted")">@label</span>
+            @if (idx < 4) { <i class="bi bi-chevron-right text-muted small"></i> }
+        </div>
+    }
+</div>
+
+@* Adım 1: Kaynak seç *@
+@if (_step == 1)
+{
+    <div class="yi-card">
+        <div class="yi-card-header"><h2 class="yi-card-title">Hangi veri kaynağını eşlemek istiyorsun?</h2></div>
+        <div class="yi-card-body">
+            @foreach (var ds in _dataSources)
+            {
+                <div class="yi-card mb-2" style="cursor:pointer;@(_selectedDsId == ds.Id ? "border-color:var(--yi-accent)" : "")"
+                     @onclick="() => _selectedDsId = ds.Id">
+                    <div class="yi-card-body d-flex align-items-center gap-3">
+                        <i class="bi bi-database fs-4"></i>
+                        <div>
+                            <div class="fw-semibold">@ds.Name</div>
+                            <div class="text-muted small">@ds.ServerType — @ds.Description</div>
+                        </div>
+                        @if (ds.Id == _selectedDsId)
+                        { <i class="bi bi-check-circle-fill text-success ms-auto"></i> }
+                    </div>
+                </div>
+            }
+            <button class="yi-btn-primary mt-3" @onclick="StartDiscoveryAsync"
+                    disabled="@(_selectedDsId == 0)">
+                <i class="bi bi-search"></i> Şemayı Keşfet
+            </button>
+        </div>
+    </div>
+}
+
+@* Adım 2: Keşif çalışıyor *@
+@if (_step == 2)
+{
+    <div class="yi-card text-center py-5">
+        <div class="spinner-border mb-3" role="status"></div>
+        <div class="fw-semibold">Şema keşfediliyor...</div>
+        <div class="text-muted small mt-1">Tablolar, kolonlar ve örnek veriler taranıyor</div>
+    </div>
+}
+
+@* Adım 3: Soruları cevapla *@
+@if (_step == 3 && _questions.Count > 0)
+{
+    <div class="yi-card mb-3">
+        <div class="yi-card-header d-flex justify-content-between align-items-center">
+            <h2 class="yi-card-title">@_questions.Count soru var</h2>
+            <span class="badge" style="background:var(--yi-accent);color:#fff">
+                @_answers.Count / @_questions.Count cevaplandı
+            </span>
+        </div>
+        <div class="yi-card-body">
+            <p class="text-muted">AI'ın doğru SQL üretebilmesi için bu soruları yanıtla. Kritik olanlar zorunlu.</p>
+        </div>
+    </div>
+
+    @foreach (var q in _questions)
+    {
+        var answered = _answers.Any(a => a.QuestionId == q.Id && !string.IsNullOrEmpty(a.Answer));
+        <div class="yi-card mb-2" style="@(q.Priority == YonetIQ.Data.Models.QuestionPriority.Critical && !answered ? "border-color:var(--yi-danger)" : "")">
+            <div class="yi-card-body">
+                <div class="d-flex align-items-start gap-2 mb-2">
+                    @if (q.Priority == YonetIQ.Data.Models.QuestionPriority.Critical)
+                    { <span class="badge bg-danger">Kritik</span> }
+                    else if (q.Priority == YonetIQ.Data.Models.QuestionPriority.High)
+                    { <span class="badge bg-warning text-dark">Önemli</span> }
+                    else
+                    { <span class="badge bg-secondary">Bilgi</span> }
+                    <div class="fw-semibold">@q.Question</div>
+                    @if (answered) { <i class="bi bi-check-circle-fill text-success ms-auto"></i> }
+                </div>
+
+                @if (!string.IsNullOrEmpty(q.Context))
+                {
+                    <div class="text-muted small mb-2 p-2 rounded" style="background:var(--yi-bg-subtle)">
+                        <i class="bi bi-info-circle"></i> @q.Context
+                    </div>
+                }
+
+                @if (q.Options?.Count > 0)
+                {
+                    <select class="yi-input" value="@GetAnswer(q.Id)"
+                            @onchange="e => SetAnswer(q.Id, e.Value?.ToString() ?? string.Empty)">
+                        <option value="">-- Seç --</option>
+                        @foreach (var opt in q.Options)
+                        { <option value="@opt">@opt</option> }
+                    </select>
+                }
+                else
+                {
+                    <input type="text" class="yi-input" placeholder="Cevabını buraya yaz..."
+                           value="@GetAnswer(q.Id)"
+                           @onchange="e => SetAnswer(q.Id, e.Value?.ToString() ?? string.Empty)" />
+                }
+            </div>
+        </div>
+    }
+
+    <button class="yi-btn-primary mt-3" @onclick="() => _step = 4"
+            disabled="@(CriticalUnanswered > 0)">
+        @if (CriticalUnanswered > 0)
+        { <span>@CriticalUnanswered kritik soru cevap bekliyor</span> }
+        else
+        { <span><i class="bi bi-arrow-right"></i> Devam Et</span> }
+    </button>
+}
+
+@* Adım 4: Onay ve kaydet *@
+@if (_step == 4)
+{
+    <div class="yi-card mb-3">
+        <div class="yi-card-header"><h2 class="yi-card-title">Eşleme Özeti</h2></div>
+        <div class="yi-card-body">
+            <table class="yi-table">
+                <thead><tr><th>Soru</th><th>Cevap</th></tr></thead>
+                <tbody>
+                    @foreach (var a in _answers.Where(a => !string.IsNullOrEmpty(a.Answer)))
+                    {
+                        var q = _questions.FirstOrDefault(x => x.Id == a.QuestionId);
+                        <tr>
+                            <td class="text-muted small">@(q?.Question ?? a.QuestionId)</td>
+                            <td class="fw-semibold">@a.Answer</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="yi-btn-primary" @onclick="SaveMappingAsync" disabled="@_saving">
+            @if (_saving) { <span class="spinner-border spinner-border-sm me-1"></span> }
+            <i class="bi bi-check2-all"></i> Eşlemeyi Kaydet
+        </button>
+        <button class="yi-btn-outline" @onclick="() => _step = 3">Geri</button>
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_successMessage))
+{
+    <div class="alert alert-success mt-3">
+        <i class="bi bi-check-circle"></i> @_successMessage
+    </div>
+}
+
+@if (!string.IsNullOrEmpty(_errorMessage))
+{
+    <div class="alert alert-danger mt-3">
+        <i class="bi bi-exclamation-triangle"></i> @_errorMessage
+    </div>
+}
+
+@code {
+    private int _step = 1;
+    private int _selectedDsId;
+    private bool _saving;
+    private string _successMessage = string.Empty;
+    private string _errorMessage = string.Empty;
+    private List<YonetIQ.Data.Models.DataSource> _dataSources = [];
+    private YonetIQ.Data.Models.SchemaDiscoveryResult? _discovery;
+    private List<YonetIQ.Data.Models.SchemaQuestion> _questions = [];
+    private List<YonetIQ.Data.Models.SchemaAnswer> _answers = [];
+
+    private int CriticalUnanswered => _questions.Count(q =>
+        q.Priority == YonetIQ.Data.Models.QuestionPriority.Critical &&
+        !_answers.Any(a => a.QuestionId == q.Id && !string.IsNullOrEmpty(a.Answer)));
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionSvc.IsLoggedIn || SessionSvc.ActiveUser.Role != "Genel Müdür")
+        { Nav.NavigateTo("/"); return; }
+
+        var r = await DataSourceSvc.GetAllAsync(onlyActive: true);
+        if (r.IsSuccess) _dataSources = r.Data ?? [];
+    }
+
+    private async Task StartDiscoveryAsync()
+    {
+        _step = 2; _errorMessage = string.Empty; StateHasChanged();
+        var result = await DiscoverySvc.DiscoverAsync(_selectedDsId);
+        if (!result.IsSuccess) { _errorMessage = result.Message; _step = 1; return; }
+        _discovery = result.Data;
+        _questions = DiscoverySvc.GenerateQuestions(_discovery!);
+        _answers.Clear();
+        _step = _questions.Count > 0 ? 3 : 4;
+    }
+
+    private string GetAnswer(string qId) =>
+        _answers.FirstOrDefault(a => a.QuestionId == qId)?.Answer ?? "";
+
+    private void SetAnswer(string qId, string value)
+    {
+        var existing = _answers.FirstOrDefault(a => a.QuestionId == qId);
+        if (existing is not null) existing.Answer = value;
+        else _answers.Add(new YonetIQ.Data.Models.SchemaAnswer { QuestionId = qId, Answer = value });
+    }
+
+    private async Task SaveMappingAsync()
+    {
+        _saving = true; _errorMessage = string.Empty; StateHasChanged();
+        try
+        {
+            var outputPath = Path.Combine(AppContext.BaseDirectory, "Data", "schema_mapping.json");
+            await DiscoverySvc.SaveMappingAsync(_discovery!, _answers, outputPath);
+
+            // SemanticDefinitions bootstrap
+            var bootstrapResult = await BootstrapSvc.BootstrapFromMappingAsync(outputPath);
+            var termCount = bootstrapResult.IsSuccess ? bootstrapResult.Data : 0;
+
+            _successMessage = $"Şema eşlemesi kaydedildi. {termCount} semantik terim eklendi. AI artık bu verileri anlayabilir.";
+        }
+        catch (Exception ex)
+        {
+            _errorMessage = $"Kayıt hatası: {ex.Message}";
+        }
+        finally { _saving = false; }
+    }
+}
