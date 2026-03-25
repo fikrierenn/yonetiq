@@ -78,6 +78,15 @@ builder.Services.AddScoped<YonetIQ.Data.Services.AI.AiQualityTestService>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.AiEvaluationService>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.ProactiveInsightService>();
 
+// WP3: Öğrenme sistemi servisleri
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.SkillPersistenceService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.LearningSignalService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.ConversationContextService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticEnricher>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.SkillTriggerEngine>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticDiscoveryService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.ContinuousLearningService>();
+
 // DataSource şifreleme anahtarı yoksa uyar ve otomatik oluştur (yalnızca geliştirme ortamı için güvenli)
 var encKey = builder.Configuration["DataSourceEncryptionKey"];
 if (string.IsNullOrWhiteSpace(encKey))

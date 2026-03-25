@@ -47,7 +47,7 @@ public class SkillDefinition
     // --- AI Konfigürasyonu ---
 
     /// <summary>Gemini temperature (0.0 - 1.0)</summary>
-    public float Temperature { get; init; } = 0.2f;
+    public float Temperature { get; set; } = 0.2f;
 
     /// <summary>System prompt dosya adı (Prompts klasöründe, ör: "task.clarify.system.md")</summary>
     public required string SystemPromptFile { get; init; }
@@ -58,10 +58,10 @@ public class SkillDefinition
     // --- Guardrails ---
 
     /// <summary>Maksimum input token sayısı (tahmini)</summary>
-    public int MaxTokenInput { get; init; } = 4000;
+    public int MaxTokenInput { get; set; } = 4000;
 
     /// <summary>Maksimum çıktı uzunluğu (karakter)</summary>
-    public int MaxOutputLength { get; init; } = 2000;
+    public int MaxOutputLength { get; set; } = 2000;
 
     /// <summary>Yasaklı eylemler</summary>
     public string[] ProhibitedActions { get; init; } = [];
