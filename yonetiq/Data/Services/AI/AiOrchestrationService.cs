@@ -11,6 +11,8 @@ public class AiOrchestrationService(
     SkillRegistry skillRegistry,
     ContextBuilderService contextBuilder,
     SkillExecutor skillExecutor,
+    AiProviderService aiProvider,
+    PromptEngine promptEngine,
     AiMemoryService memoryService,
     ConversationContextService conversationSvc,
     SemanticDiscoveryService semanticDiscoverySvc,
@@ -131,6 +133,71 @@ public class AiOrchestrationService(
         // Tüm skill'leri göster (Reactive + Proactive + Hybrid) — sidebar'dan tetiklenebilir
         return skillRegistry.ResolveByModule(module);
     }
+
+    /// <summary>
+    /// Streaming versiyonu — CommandBar UI'a IAsyncEnumerable döner.
+    /// Etkileşim kaydı stream tamamlanınca yapılır.
+    /// Sadece Text ve Suggestion output tipi streaming destekler.
+    /// </summary>
+    public async IAsyncEnumerable<string> ProcessRequestStreamAsync(
+        AiRequest request,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        CancellationToken ct = default)
+    {
+        if (request.UserId <= 0) { yield return "[HATA: Geçersiz kullanıcı]"; yield break; }
+
+        var skill = !string.IsNullOrWhiteSpace(request.SkillId)
+            ? skillRegistry.Resolve(request.SkillId)
+            : RouteToSkill(request);
+
+        if (skill is null) { yield return "[HATA: Skill bulunamadı]"; yield break; }
+
+        if (!AiProviderService.SupportsStreaming(skill.OutputType))
+        {
+            // Streaming desteklenmiyorsa normal çalıştır, tek parça dön
+            var normalResponse = await ProcessRequestAsync(request);
+            yield return normalResponse.Content ?? normalResponse.ErrorMessage ?? "";
+            yield break;
+        }
+
+        var context = await contextBuilder.BuildContextAsync(skill, request);
+        var variables = SkillExecutor.BuildVariables(skill, context);
+
+        var systemPrompt = promptEngine.RenderTemplate(
+            await promptEngine.LoadSystemPromptAsync(skill.SystemPromptFile), variables);
+        var userPrompt = promptEngine.RenderTemplate(
+            await promptEngine.LoadPromptAsync(skill.UserPromptFile), variables);
+
+        // Sanitize
+        systemPrompt = SanitizeForStream(systemPrompt);
+        userPrompt = SanitizeForStream(userPrompt);
+        if (!string.IsNullOrWhiteSpace(context.UserInput))
+            userPrompt += $"\n\nKullanıcı Girdisi:\n{SanitizeForStream(context.UserInput)}";
+
+        var fullContent = new System.Text.StringBuilder();
+        await foreach (var chunk in aiProvider.GenerateStreamAsync(
+            systemPrompt, userPrompt, skill.Temperature, ct))
+        {
+            fullContent.Append(chunk);
+            yield return chunk;
+        }
+
+        // Stream tamamlandı — etkileşim kaydı
+        if (fullContent.Length > 0)
+        {
+            var interaction = new AiInteraction
+            {
+                UserId = request.UserId, SkillId = skill.Id, Module = request.Module,
+                InputSummary = TruncateForSummary(request.UserInput ?? skill.Name, 200),
+                OutputSummary = TruncateForSummary(fullContent.ToString(), 500),
+                ConfidenceScore = 0.7m, IsSuccess = true, CreatedAt = DateTime.UtcNow
+            };
+            await memoryService.SaveInteractionAsync(interaction);
+        }
+    }
+
+    private static string SanitizeForStream(string? text) =>
+        string.IsNullOrWhiteSpace(text) ? string.Empty : text.Length > 32000 ? text[..32000] : text;
 
     /// <summary>
     /// Kullanıcı geri bildirimini kaydeder.

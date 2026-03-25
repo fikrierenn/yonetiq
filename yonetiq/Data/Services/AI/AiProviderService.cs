@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using YonetIQ.Data.Infrastructure;
+using YonetIQ.Data.Models.AI;
 
 namespace YonetIQ.Data.Services.AI;
 
@@ -205,5 +206,83 @@ public class AiProviderService(HttpClient http, IConfiguration config, ILogger<A
             "gemini-2.0-flash", "gemini-1.5-flash", "gemini-2.5-flash-lite"
         };
         return new[] { preferred }.Concat(all.Where(m => m != preferred)).ToArray();
+    }
+
+    // ── WP11: Streaming ─────────────────────────────────────────────────────
+
+    /// <summary>
+    /// Streaming AI yanıtı — Gemini SSE endpoint üzerinden token token IAsyncEnumerable döner.
+    /// </summary>
+    public async IAsyncEnumerable<string> GenerateStreamAsync(
+        string systemPrompt, string userPrompt, float temperature = 0.2f,
+        [System.Runtime.CompilerServices.EnumeratorCancellation]
+        CancellationToken ct = default)
+    {
+        if (!_config.IsProviderAvailable("gemini")) yield break;
+
+        var model = _config.GeminiModel;
+        var url = $"{_config.GeminiEndpoint}/v1beta/models/{model}:streamGenerateContent?alt=sse";
+
+        var payload = JsonSerializer.Serialize(new
+        {
+            system_instruction = new { parts = new[] { new { text = systemPrompt } } },
+            contents = new[] { new { role = "user", parts = new[] { new { text = userPrompt } } } },
+            generationConfig = new { temperature }
+        });
+
+        using var req = new HttpRequestMessage(HttpMethod.Post, url);
+        req.Headers.Add("x-goog-api-key", _config.GeminiApiKey);
+        req.Content = new StringContent(payload, Encoding.UTF8, "application/json");
+
+        HttpResponseMessage response;
+        try
+        {
+            response = await http.SendAsync(req, HttpCompletionOption.ResponseHeadersRead, ct);
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "[Gemini] Stream request failed");
+            yield break;
+        }
+
+        if (!response.IsSuccessStatusCode)
+        {
+            logger.LogWarning("[Gemini] Stream response: {Status}", response.StatusCode);
+            yield break;
+        }
+
+        await using var stream = await response.Content.ReadAsStreamAsync(ct);
+        using var reader = new StreamReader(stream);
+
+        string? line;
+        while ((line = await reader.ReadLineAsync(ct)) is not null && !ct.IsCancellationRequested)
+        {
+            if (string.IsNullOrEmpty(line) || !line.StartsWith("data: ")) continue;
+
+            var data = line[6..];
+            if (data == "[DONE]") yield break;
+
+            string? chunk = null;
+            try
+            {
+                using var doc = JsonDocument.Parse(data);
+                chunk = doc.RootElement
+                    .GetProperty("candidates")[0]
+                    .GetProperty("content")
+                    .GetProperty("parts")[0]
+                    .GetProperty("text")
+                    .GetString();
+            }
+            catch { continue; }
+
+            if (!string.IsNullOrEmpty(chunk))
+                yield return chunk;
+        }
+    }
+
+    /// <summary>Skill'in streaming'i destekleyip desteklemediğini kontrol eder.</summary>
+    public static bool SupportsStreaming(SkillOutputType outputType)
+    {
+        return outputType is SkillOutputType.Text or SkillOutputType.Suggestion;
     }
 }
