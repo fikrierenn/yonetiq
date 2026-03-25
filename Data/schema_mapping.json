@@ -57,8 +57,17 @@
       "publisherIdColumn": "frmID",
       "salePriceColumn": "SatisFiyat",
       "statusColumn": "urnDurum",
+      "barcodeTable": {
+        "tableName": "urnBrkd",
+        "productIdColumn": "urnBrkdStkID",
+        "barcodeColumn": "urnBarkod",
+        "quantityColumn": "urnBrkdAdet",
+        "priorityColumn": "urnBrkdOnce",
+        "stats": "862K barkod, 839K farklı ürün — bir ürünün birden fazla barkodu olabilir"
+      },
       "notes": {
-        "isbn": "BarkodAna kolonu ISBN/barkod içerir, stkKod ise iç stok kodu",
+        "isbn": "UrunBilgi.BarkodAna sadece ANA barkod. Tüm barkodlar urnBrkd tablosunda (862K kayıt)",
+        "barcodeJoin": "urnBrkd.urnBrkdStkID = urn.stkID — barkoddan ürüne ulaşım",
         "categories": "KatAna ana kategori, Kat1-Kat5 alt kategori hiyerarşisi",
         "urnBilgi": "EAV tablosu — ek ürün bilgileri (sayfa sayısı, basım yılı vb.)"
       }
