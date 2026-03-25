@@ -1,0 +1,163 @@
+@page "/admin/skill-studio"
+@inject YonetIQ.Data.Services.AI.MetaSkillService MetaSvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<PageTitle>Skill Studio</PageTitle>
+
+<div class="yi-page-header mb-4">
+    <h1 class="yi-page-title"><i class="bi bi-stars me-2"></i>Skill Studio</h1>
+    <p class="text-muted">AI ile yeni skill oluştur, analiz et, iyileştir</p>
+</div>
+
+<div class="row g-4">
+    @* Sol: Giriş formu *@
+    <div class="col-lg-5">
+        <div class="yi-card">
+            <div class="yi-card-header">
+                <div class="d-flex gap-2">
+                    <button class="yi-btn-sm @(_mode == "analyze" ? "yi-btn-primary" : "yi-btn-outline")"
+                            @onclick="SetModeAnalyze">Analiz Et</button>
+                    <button class="yi-btn-sm @(_mode == "generate" ? "yi-btn-primary" : "yi-btn-outline")"
+                            @onclick="SetModeGenerate">Skill Üret</button>
+                    <button class="yi-btn-sm @(_mode == "refine" ? "yi-btn-primary" : "yi-btn-outline")"
+                            @onclick="SetModeRefine">Prompt İyileştir</button>
+                </div>
+            </div>
+            <div class="yi-card-body">
+                @if (_mode == "analyze" || _mode == "generate")
+                {
+                    <label class="yi-label">@(_mode == "analyze" ? "Skill fikrinizi açıklayın" : "Skill spesifikasyonu")</label>
+                    <textarea class="yi-input" rows="6" @bind="_input"
+                              placeholder="@(_mode == "analyze" ? "Örn: Müşteri segmentasyonuna göre kampanya önerisi yapan bir skill..." : "Örn: Modül: report, Tetikleme: Reactive, Açıklama: Aylık satış trendlerini analiz eder...")"></textarea>
+                }
+                else
+                {
+                    <label class="yi-label">İyileştirilecek Skill ID</label>
+                    <input type="text" class="yi-input" @bind="_refineSkillId"
+                           placeholder="Örn: task.clarify" />
+                }
+
+                <button class="yi-btn-primary mt-3 w-100" @onclick="ExecuteAsync"
+                        disabled="@_processing">
+                    @if (_processing)
+                    { <span class="spinner-border spinner-border-sm me-1"></span> }
+                    <i class="bi bi-lightning-charge"></i>
+                    @(_mode == "analyze" ? "Analiz Et" : _mode == "generate" ? "Skill Üret" : "Prompt İyileştir")
+                </button>
+            </div>
+        </div>
+    </div>
+
+    @* Sağ: Sonuç *@
+    <div class="col-lg-7">
+        @if (!string.IsNullOrEmpty(_result))
+        {
+            <div class="yi-card">
+                <div class="yi-card-header d-flex justify-content-between align-items-center">
+                    <h2 class="yi-card-title">Sonuç</h2>
+                    @if (_generatedOutput is not null)
+                    {
+                        <button class="yi-btn-primary yi-btn-sm" @onclick="PublishAsync"
+                                disabled="@_publishing">
+                            @if (_publishing) { <span class="spinner-border spinner-border-sm me-1"></span> }
+                            <i class="bi bi-upload"></i> Yayınla
+                        </button>
+                    }
+                </div>
+                <div class="yi-card-body">
+                    <div class="yi-ai-content">@((MarkupString)FormatContent(_result))</div>
+                </div>
+            </div>
+        }
+
+        @if (!string.IsNullOrEmpty(_statusMessage))
+        {
+            <div class="alert @(_isError ? "alert-danger" : "alert-success") mt-3">
+                @_statusMessage
+            </div>
+        }
+    </div>
+</div>
+
+@code {
+    private string _mode = "analyze";
+    private string _input = string.Empty;
+    private string _refineSkillId = string.Empty;
+    private string _result = string.Empty;
+    private string _statusMessage = string.Empty;
+    private bool _isError;
+    private bool _processing;
+    private bool _publishing;
+    private YonetIQ.Data.Services.AI.SkillWriterOutput? _generatedOutput;
+
+    private void SetModeAnalyze() => _mode = "analyze";
+    private void SetModeGenerate() => _mode = "generate";
+    private void SetModeRefine() => _mode = "refine";
+
+    protected override void OnInitialized()
+    {
+        if (!SessionSvc.IsLoggedIn || SessionSvc.ActiveUser.Role != "Genel Müdür")
+            Nav.NavigateTo("/");
+    }
+
+    private async Task ExecuteAsync()
+    {
+        _processing = true; _result = string.Empty; _statusMessage = string.Empty;
+        _generatedOutput = null; StateHasChanged();
+
+        try
+        {
+            var userId = SessionSvc.ActiveUser.UserId;
+            switch (_mode)
+            {
+                case "analyze":
+                    var analyzeRes = await MetaSvc.AnalyzeSkillIdeaAsync(_input, userId);
+                    _result = analyzeRes.Content ?? analyzeRes.ErrorMessage ?? "Sonuç alınamadı";
+                    break;
+
+                case "generate":
+                    var genRes = await MetaSvc.GenerateSkillAsync(_input, userId);
+                    if (genRes.IsSuccess && genRes.Data is not null)
+                    {
+                        _generatedOutput = genRes.Data;
+                        _result = $"**Skill ID:** {genRes.Data.SkillId}\n**Ad:** {genRes.Data.Name}\n**Modül:** {genRes.Data.Module}\n\n**System Prompt:**\n```\n{genRes.Data.SystemPrompt}\n```\n\n**User Prompt:**\n```\n{genRes.Data.UserPrompt}\n```";
+                    }
+                    else
+                        _result = genRes.Message;
+                    break;
+
+                case "refine":
+                    var refineRes = await MetaSvc.RefinePromptAsync(_refineSkillId, userId);
+                    _result = refineRes.Content ?? refineRes.ErrorMessage ?? "Sonuç alınamadı";
+                    break;
+            }
+        }
+        catch (Exception ex)
+        {
+            _result = $"Hata: {ex.Message}";
+        }
+        finally { _processing = false; }
+    }
+
+    private async Task PublishAsync()
+    {
+        if (_generatedOutput is null) return;
+        _publishing = true; StateHasChanged();
+
+        var res = await MetaSvc.PublishSkillAsync(_generatedOutput, SessionSvc.ActiveUser.UserId);
+        _statusMessage = res.IsSuccess ? res.Message : res.Message;
+        _isError = !res.IsSuccess;
+        if (res.IsSuccess) _generatedOutput = null;
+        _publishing = false;
+    }
+
+    private static string FormatContent(string content)
+    {
+        if (string.IsNullOrEmpty(content)) return "";
+        return content
+            .Replace("**", "<strong>").Replace("**", "</strong>")
+            .Replace("```json", "<pre><code>").Replace("```", "</code></pre>")
+            .Replace("\n", "<br/>");
+    }
+}

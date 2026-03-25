@@ -87,6 +87,7 @@ builder.Services.AddScoped<YonetIQ.Data.Services.AI.SkillTriggerEngine>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticDiscoveryService>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.ContinuousLearningService>();
 builder.Services.AddScoped<YonetIQ.Data.Services.AI.SemanticBootstrapService>();
+builder.Services.AddScoped<YonetIQ.Data.Services.AI.MetaSkillService>();
 
 // WP8: Schema Discovery
 builder.Services.AddScoped<YonetIQ.Data.Services.SchemaDiscoveryService>();
@@ -171,6 +172,11 @@ using (var scope = app.Services.CreateScope())
     registry.Register(YonetIQ.Data.AiSkills.Definitions.ApprovalSkills.Bottleneck);
     registry.Register(YonetIQ.Data.AiSkills.Definitions.ApprovalSkills.Anomaly);
     registry.Register(YonetIQ.Data.AiSkills.Definitions.ReportSkills.Trends);
+
+    // WP7: Meta-Skill'ler
+    registry.Register(YonetIQ.Data.AiSkills.Definitions.MetaSkills.SkillAnalyzer);
+    registry.Register(YonetIQ.Data.AiSkills.Definitions.MetaSkills.SkillWriter);
+    registry.Register(YonetIQ.Data.AiSkills.Definitions.MetaSkills.PromptRefiner);
 }
 
 // Development ortamında AI QA test suite çalıştır

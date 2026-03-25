@@ -1,0 +1,120 @@
+@page "/admin/skill-management"
+@inject YonetIQ.Data.Services.AI.SkillRegistry Registry
+@inject YonetIQ.Data.Services.AI.SkillPersistenceService PersistenceSvc
+@inject YonetIQ.Data.Services.AI.ContinuousLearningService LearningSvc
+@inject SessionService SessionSvc
+@inject NavigationManager Nav
+
+<PageTitle>Skill Yönetimi</PageTitle>
+
+<div class="yi-page-header mb-4">
+    <h1 class="yi-page-title"><i class="bi bi-gear me-2"></i>Skill Yönetimi</h1>
+    <p class="text-muted">@Registry.Count aktif skill | Performans izleme ve yönetim</p>
+</div>
+
+@if (_skills.Count > 0)
+{
+    <div class="yi-card">
+        <div class="yi-card-body p-0">
+            <table class="yi-table mb-0">
+                <thead>
+                    <tr>
+                        <th>Skill</th>
+                        <th>Modül</th>
+                        <th>Tetikleme</th>
+                        <th>Temp.</th>
+                        <th>Performans</th>
+                        <th class="text-right">İşlem</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var item in _skills)
+                    {
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">@item.Skill.Name</div>
+                                <div class="text-muted small">@item.Skill.Id</div>
+                            </td>
+                            <td><span class="yi-badge yi-badge-light">@item.Skill.Module</span></td>
+                            <td>
+                                @if (item.Skill.TriggerMode == YonetIQ.Data.Models.AI.TriggerMode.Proactive)
+                                { <span class="yi-badge yi-badge-info">Proaktif</span> }
+                                else
+                                { <span class="yi-badge yi-badge-light">Reaktif</span> }
+                            </td>
+                            <td>@item.Skill.Temperature.ToString("F1")</td>
+                            <td>
+                                @if (item.Performance is not null && item.Performance.TotalInteractions > 0)
+                                {
+                                    <div class="small">
+                                        <span class="fw-semibold">@item.Performance.TotalInteractions</span> çağrı,
+                                        <span class="@(item.Performance.SuccessRate >= 80 ? "text-success" : item.Performance.SuccessRate >= 50 ? "text-warning" : "text-danger")">
+                                            %@item.Performance.SuccessRate.ToString("F0")
+                                        </span> başarı
+                                    </div>
+                                }
+                                else
+                                { <span class="text-muted small">Veri yok</span> }
+                            </td>
+                            <td class="text-right">
+                                <button class="yi-btn-outline-danger yi-btn-sm"
+                                        @onclick="() => DisableSkillAsync(item.Skill.Id)"
+                                        title="Devre Dışı Bırak">
+                                    <i class="bi bi-pause-circle"></i>
+                                </button>
+                            </td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </div>
+}
+else
+{
+    <div class="yi-card text-center py-5">
+        <i class="bi bi-stars fs-1 text-muted"></i>
+        <div class="mt-2 text-muted">Henüz skill kaydı yok</div>
+    </div>
+}
+
+@code {
+    private List<SkillWithPerformance> _skills = [];
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (!SessionSvc.IsLoggedIn || SessionSvc.ActiveUser.Role != "Genel Müdür")
+        { Nav.NavigateTo("/"); return; }
+
+        await LoadSkillsAsync();
+    }
+
+    private async Task LoadSkillsAsync()
+    {
+        var allSkills = Registry.ListAll();
+        var items = new List<SkillWithPerformance>();
+
+        foreach (var skill in allSkills.OrderBy(s => s.Module).ThenBy(s => s.Name))
+        {
+            var perfResult = await LearningSvc.GetSkillPerformanceAsync(skill.Id);
+            items.Add(new SkillWithPerformance
+            {
+                Skill = skill,
+                Performance = perfResult.IsSuccess ? perfResult.Data : null
+            });
+        }
+        _skills = items;
+    }
+
+    private async Task DisableSkillAsync(string skillId)
+    {
+        await PersistenceSvc.DisableAsync(skillId, SessionSvc.ActiveUser.UserId);
+        await LoadSkillsAsync();
+    }
+
+    private class SkillWithPerformance
+    {
+        public YonetIQ.Data.Models.AI.SkillDefinition Skill { get; set; } = null!;
+        public YonetIQ.Data.Services.AI.SkillPerformanceSummary? Performance { get; set; }
+    }
+}
