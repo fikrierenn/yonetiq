@@ -1,0 +1,113 @@
+{
+  "version": "1.0",
+  "mappedAt": "2026-03-25T15:00:00Z",
+  "database": "DerinSISBkm",
+  "server": "192.168.40.201",
+  "tables": {
+    "sales": {
+      "tableName": "fatAyr",
+      "headerTable": "fat",
+      "joinKey": "fatAyr.ehID = fat.eID",
+      "amountColumn": "ehTutar",
+      "amountWithVatColumn": "ehTutarKDV",
+      "netAmountColumn": "ehTutarN",
+      "discountColumn": "ehIndirim",
+      "quantityColumn": "ehAdet",
+      "costColumn": "ehMaliyet",
+      "dateColumn": "fat.eTarih",
+      "storeColumn": "fat.eMekan",
+      "productColumn": "fatAyr.ehStkID",
+      "invoiceNoColumn": "fat.eNo",
+      "typeColumn": "fat.eTip",
+      "directionColumn": "fat.eGC",
+      "notes": {
+        "eGC": "0=Giriş(Alış), 1=Çıkış(Satış)",
+        "eTip_0": "Alış",
+        "eTip_1": "Satış",
+        "eTip_2": "Alış İade",
+        "eTip_3": "Satış İade",
+        "eTip_4": "Mağaza Satış",
+        "eTip_5": "Mağaza Satış İade",
+        "eTip_6": "Hizmet",
+        "eTip_7": "Gider",
+        "eTip_8": "Fiyat Farkı",
+        "eTip_9": "Fiyat Farkı Düzeltmesi",
+        "eTip_10": "İade Fark Faturası",
+        "eTip_11": "Satış Fiyat Farkı",
+        "eTip_12": "Satış Fiyat Farkı Düzeltme"
+      },
+      "salesFilter": "fat.eGC = 1 AND fat.eTip IN (1, 4)",
+      "returnFilter": "fat.eGC = 1 AND fat.eTip IN (3, 5)"
+    },
+    "products": {
+      "tableName": "urn",
+      "viewName": "UrunBilgi",
+      "idColumn": "stkID",
+      "codeColumn": "stkKod",
+      "nameColumn": "stkAd",
+      "barcodeColumn": "BarkodAna",
+      "categoryColumn": "KatAna",
+      "subCategory1": "Kat1",
+      "subCategory2": "Kat2",
+      "brandColumn": "mrkAd",
+      "brandIdColumn": "mrkID",
+      "authorColumn": "Yazar",
+      "authorIdColumn": "YazarId",
+      "publisherColumn": "FirmaAd",
+      "publisherIdColumn": "frmID",
+      "salePriceColumn": "SatisFiyat",
+      "statusColumn": "urnDurum",
+      "notes": {
+        "isbn": "BarkodAna kolonu ISBN/barkod içerir, stkKod ise iç stok kodu",
+        "categories": "KatAna ana kategori, Kat1-Kat5 alt kategori hiyerarşisi",
+        "urnBilgi": "EAV tablosu — ek ürün bilgileri (sayfa sayısı, basım yılı vb.)"
+      }
+    },
+    "stores": {
+      "tableName": "posMagaza",
+      "idColumn": "mekanID",
+      "nameColumn": "mekanAd",
+      "codeColumn": "mekanKod",
+      "statusColumn": "mekanDurum",
+      "typeColumn": "mekanTip",
+      "groupColumn": "mekanGrup"
+    },
+    "categories": {
+      "tableName": "urnKtgr",
+      "idColumn": "ktgrID",
+      "nameColumn": "ktgrAd"
+    },
+    "brands": {
+      "tableName": "urnMrk",
+      "idColumn": "mrkID",
+      "nameColumn": "mrkAd"
+    },
+    "stock": {
+      "tableName": "urnOzt",
+      "notes": "8.4M satır — mağaza bazlı stok özet tablosu"
+    }
+  },
+  "views": {
+    "UrunBilgi": "Ürün master view — ISBN, yazar, marka, kategori, fiyat hepsi burada",
+    "fatTip_vw": "Fatura tip tanımları (13 tip)",
+    "irsTip_vw": "İrsaliye tip tanımları",
+    "fat_vw": "Fatura genel view",
+    "MagazaSatis": "Mağaza satış view"
+  },
+  "otherDatabases": [
+    {"name": "BKMDATA", "size": "67 GB", "purpose": "Veri ambarı/raporlama"},
+    {"name": "DerinSISBkmWeb", "size": "29 GB", "purpose": "Web satış"},
+    {"name": "BKMMaliyet", "size": "24 GB", "purpose": "Maliyet hesaplama"},
+    {"name": "DerinSISBkmCrm", "size": "12 GB", "purpose": "CRM"},
+    {"name": "DerinCrm", "size": "2.5 GB", "purpose": "CRM (eski)"}
+  ],
+  "conventions": {
+    "prefix_e": "Evrak (eID, eNo, eTarih, eMekan)",
+    "prefix_eh": "Evrak hareket/satır (ehStkID, ehTutar, ehAdet)",
+    "prefix_stk": "Stok/Ürün (stkID, stkKod, stkAd)",
+    "prefix_mekan": "Mağaza (mekanID, mekanAd)",
+    "prefix_urn": "Ürün ek (urnKtgrID, urnMrkID)",
+    "prefix_ktgr": "Kategori (ktgrID, ktgrAd)",
+    "prefix_mrk": "Marka/Yayınevi (mrkID, mrkAd)"
+  }
+}
